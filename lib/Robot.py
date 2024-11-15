@@ -3,6 +3,7 @@ import pygame
 
 # Two motors, alternate their speed to change direction
 class Robot:
+    RADIUS = 10
     def __init__(self):
         self.x, self.y = 0, 0 # coords
         self.speed1, self.speed2 = 0, 0 # motor speeds
