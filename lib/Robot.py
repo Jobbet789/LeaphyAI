@@ -25,5 +25,5 @@ class Robot:
         self.speed2 = speed2
     
     def draw(self, screen):
-        pygame.draw.circle(screen, (255, 0, 0), (int(self.x), int(self.y)), 10)
+        pygame.draw.circle(screen, (255, 0, 0), (int(self.x), int(self.y)), self.RADIUS)
         pygame.draw.line(screen, (0, 0, 255), (self.x, self.y), (self.x + 20 * math.cos(self.heading), self.y + 20 * math.sin(self.heading)), 5)
