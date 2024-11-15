@@ -45,8 +45,10 @@ def main():
         else:
             robot.set_speed(1, 1)
 
-        robot.move()
+        robot.move(WIDTH, HEIGHT)
         ball.move()
+
+        robot.vision(ball)
 
         window.draw(screen, robot, ball)
         clock.tick(60)
