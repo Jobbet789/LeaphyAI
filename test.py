@@ -3,6 +3,7 @@
 # IMPORTS
 import math
 import pygame
+import random
 
 # CLASSES
 from lib import Ball
@@ -13,12 +14,6 @@ from lib import Window
 WIDTH = 800
 HEIGHT = 600
 
-BALLX = 400
-BALLY = 300
-
-ROBOTX = 400
-ROBOTY = 300
-
 window = Window.Window(WIDTH, HEIGHT)
 window.setup()
 
@@ -27,8 +22,8 @@ def main():
     run = True
     clock = pygame.time.Clock()
 
-    ball = Ball.Ball(BALLX, BALLY)
-    robot = Robot.Robot(ROBOTX, ROBOTY)
+    ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+    robot = Robot.Robot(random.randint(0, WIDTH), random.randint(0, HEIGHT))
 
     while run:
         dt = clock.tick(60) / 1000
@@ -49,6 +44,10 @@ def main():
         ball.move()
 
         robot.vision(ball)
+
+        # check if robot is colliding with ball
+        if robot.x < ball.x + ball.RADIUS and robot.x + robot.RADIUS > ball.x and robot.y < ball.y + ball.RADIUS and robot.y + robot.RADIUS > ball.y:
+            ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
 
         window.draw(screen, robot, ball)
         clock.tick(60)

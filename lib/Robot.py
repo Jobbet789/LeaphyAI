@@ -8,6 +8,7 @@ class Robot:
         self.x, self.y = x, y # position
         self.speed1, self.speed2 = 0, 0 # motor speeds
         self.heading = 0
+        self.speedMultiplier = 10
         
         self.visionLen = 150
 
@@ -15,7 +16,7 @@ class Robot:
         return (self.speed1 - self.speed2) / 2
 
     def calculate_speed(self):
-        return (self.speed1 + self.speed2) / 2 
+        return (self.speed1 + self.speed2) * self.speedMultiplier / 2 
    
     def move(self, WIDTH, HEIGHT):
         self.x += self.calculate_speed() * math.cos(self.heading)
@@ -40,17 +41,26 @@ class Robot:
 
             diff = (angle - self.heading + math.pi) % (2 * math.pi) - math.pi
             if abs(diff) < math.pi/4:
-                angles.append(diff)
-            angles.append(False)
+                angles += (angle,)
+            else: 
+                angles += (False,)
+
+        return angles
     
     def inputsNN(self, angle):
         dx = math.cos(angle)
         dy = math.sin(angle)
 
+        vis = 1
+        if angle == False:
+            dx = 0
+            dy = 0
+            vis = 0
+
         dhx = math.cos(self.heading)
         dhy = math.sin(self.heading)
 
-        return [dx, dy, dhx, dhy]
+        return [dx, dy, dhx, dhy, vis]
 
     def set_speed(self, speed1, speed2):
         self.speed1 = speed1
