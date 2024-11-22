@@ -22,7 +22,7 @@ def train_dql(episodes):
     clock = pygame.time.Clock()
 
     agent = DQLAgent.DQLAgent()
-    max_steps_per_episode = 500
+    max_steps_per_episode = 10000
     for e in range(episodes):
         robot = Robot.Robot(random.randint(0, WIDTH), random.randint(0, HEIGHT))
         ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
@@ -48,23 +48,24 @@ def train_dql(episodes):
             next_state = np.array(robot.inputsNN(robot.vision(ball)[0]))
 
             distance = math.sqrt(((robot.x+robot.RADIUS/2) - (ball.x+ball.RADIUS/2))**2 + ((robot.y+robot.RADIUS/2) - (ball.y+ball.RADIUS/2))**2)
-            reward = 50 if distance < 10 else 0
+            reward = 10000 if distance < 10 else 0
             if reward != 1:
                 # give a reward based on the distance to the ball
-                if distance < 50:
-                    reward = 1 - distance/50
+                if distance < 100:
+                    reward = 1 - distance/100
             total_reward += reward
 
             done = distance < 10
 
             agent.remember(state, action, reward, next_state, done)
             state = next_state
-            steps += 1
-            if steps % 10 == 0:
+            if e > 50:
                 window.draw(screen, robot, ball)
 
             if steps >= max_steps_per_episode:
                 done = True
+            steps += 1
+
 
             if done:
                 print(f"episode: {e}/{episodes}, score: {total_reward}, epsilon: {agent.epsilon}")
