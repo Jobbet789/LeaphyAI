@@ -67,8 +67,9 @@ class Robot:
         self.speed2 = speed2
     
     def draw(self, screen):
-        pygame.draw.circle(screen, (255, 0, 0), (int(self.x), int(self.y)), self.RADIUS)
-        pygame.draw.line(screen, (0, 0, 255), (self.x, self.y), (self.x + 20 * math.cos(self.heading), self.y + 20 * math.sin(self.heading)), 5)
+        x, y = int(self.x), int(self.y)
+        pygame.draw.circle(screen, (255, 0, 0), (x, y), self.RADIUS)
+        pygame.draw.line(screen, (0, 0, 255), (x, y), (int(self.x + 20 * math.cos(self.heading)), int(self.y + 20 * math.sin(self.heading))), 5)
         # draw two more lines to represent the 'vision' of the robot, 45 degrees to the left and right
-        pygame.draw.line(screen, (0, 255, 255), (self.x, self.y), (self.x + self.visionLen * math.cos(self.heading + math.pi/4), self.y + self.visionLen * math.sin(self.heading + math.pi/4)), 2)
-        pygame.draw.line(screen, (0, 255, 255), (self.x, self.y), (self.x + self.visionLen * math.cos(self.heading - math.pi/4), self.y + self.visionLen * math.sin(self.heading - math.pi/4)), 2)
+        pygame.draw.line(screen, (0, 255, 255), (x, y), (int(self.x + self.visionLen * math.cos(self.heading + math.pi/4)), int(self.y + self.visionLen * math.sin(self.heading + math.pi/4))), 2)
+        pygame.draw.line(screen, (0, 255, 255), (x, y), (int(self.x + self.visionLen * math.cos(self.heading - math.pi/4)), int(self.y + self.visionLen * math.sin(self.heading - math.pi/4))), 2)

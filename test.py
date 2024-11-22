@@ -1,58 +1,78 @@
-# Version: 0.0.1
+# Version 0.0.2
+import lib.Ball as Ball
+import lib.Robot as Robot
+import lib.DQLAgent as DQLAgent
+import lib.Window as Window
 
-# IMPORTS
+import numpy as np
+import tensorflow as tf
+import random
+from collections import deque
 import math
 import pygame
-import random
-
-# CLASSES
-from lib import Ball
-from lib import Robot
-from lib import Window
 
 # CONSTANTS
 WIDTH = 800
 HEIGHT = 600
 
 window = Window.Window(WIDTH, HEIGHT)
-window.setup()
 
-def main():
+def train_dql(episodes):
     screen = window.setup()
-    run = True
     clock = pygame.time.Clock()
 
-    ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    robot = Robot.Robot(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+    agent = DQLAgent.DQLAgent()
+    max_steps_per_episode = 500
+    for e in range(episodes):
+        robot = Robot.Robot(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+        ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
 
-    while run:
-        dt = clock.tick(60) / 1000
+        state = np.array(robot.inputsNN(robot.vision(ball)[0]))
+        done = False
+        total_reward = 0
+        steps = 0
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
+        while not done:
+            #clock.tick(60)
+            action = agent.act(state)
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            robot.set_speed(-10*dt, 10*dt)
-        elif keys[pygame.K_RIGHT]:
-            robot.set_speed(10*dt, -10*dt)
-        else:
-            robot.set_speed(1, 1)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
 
-        robot.move(WIDTH, HEIGHT)
-        ball.move()
+            robot.speed1 = action[0]
+            robot.speed2 = action[1]
 
-        robot.vision(ball)
+            robot.move(WIDTH, HEIGHT)
 
-        # check if robot is colliding with ball
-        if robot.x < ball.x + ball.RADIUS and robot.x + robot.RADIUS > ball.x and robot.y < ball.y + ball.RADIUS and robot.y + robot.RADIUS > ball.y:
-            ball = Ball.Ball(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+            next_state = np.array(robot.inputsNN(robot.vision(ball)[0]))
 
-        window.draw(screen, robot, ball)
-        clock.tick(60)
+            distance = math.sqrt(((robot.x+robot.RADIUS/2) - (ball.x+ball.RADIUS/2))**2 + ((robot.y+robot.RADIUS/2) - (ball.y+ball.RADIUS/2))**2)
+            reward = 50 if distance < 10 else 0
+            if reward != 1:
+                # give a reward based on the distance to the ball
+                if distance < 50:
+                    reward = 1 - distance/50
+            total_reward += reward
 
+            done = distance < 10
+
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+            steps += 1
+            if steps % 10 == 0:
+                window.draw(screen, robot, ball)
+
+            if steps >= max_steps_per_episode:
+                done = True
+
+            if done:
+                print(f"episode: {e}/{episodes}, score: {total_reward}, epsilon: {agent.epsilon}")
+
+        agent.replay()
+        if e % 10 == 0:
+            agent.update_target_model()
+
+if __name__ == '__main__':
+    train_dql(1000)
     pygame.quit()
-
-if __name__ == "__main__":
-    main()
