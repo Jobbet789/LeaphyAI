@@ -66,6 +66,12 @@ class Robot:
         else:
             self.headingToBall = 0
             return False
+    
+    def distanceToBall(self, ball: object) -> float:
+        '''
+        Get the distance to the ball
+        '''
+        return math.sqrt(((ball.x+0.5*ball.RADIUS) - (self.x+0.5*self.RADIUS))**2 + ((ball.y+0.5*ball.RADIUS) - (self.y+0.5*self.RADIUS))**2)
         
     
     def draw(self, screen) -> None:
