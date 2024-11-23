@@ -1,75 +1,79 @@
 import math
 import pygame
 
-# Two motors, alternate their speed to change direction
 class Robot:
-    RADIUS = 10
-    def __init__(self, x: int, y: int):
-        self.x, self.y = x, y # position
-        self.speed1, self.speed2 = 0, 0 # motor speeds
+    '''
+    This class represents a robot in the simulation.
+    The robot is a circle (for now)
+
+    It can move, see, and be controlled by a neural network.
+
+    The robot has two motors, one on each side, each with a speed
+    This means the robot can rotate (for example by speed1 = -1 and speed2 = 1)
+    
+    '''
+    RADIUS = 10 
+
+    def __init__(self, x: int, y: int) -> None:
+        '''
+        Init the robot, get starting pos
+
+        '''
+        self.x, self.y = x, y
+        self.speed1, self.speed2 = 0, 0
         self.heading = 0
         self.speedMultiplier = 10
-        
-        self.visionLen = 150
 
-    def calculate_angular_speed(self):
+        self.headingToBall = 0
+
+    def calculate_speed(self) -> float:
+        ''' 
+        Calculate the speed of the robot based on the motor speeds
+        '''
+        return (self.speed1 + self.speed2) * self.speedMultiplier / 2
+
+    def calculate_angular_speed(self) -> float:
+        '''
+        Calculate the angular speed of the robot based on the motor speeds 
+        '''
         return (self.speed1 - self.speed2) / 2
+    
+    def move(self, WIDTH: int, HEIGHT: int) -> None:
+        '''
+        Move the robot according to the current motor speeds and heading
+        '''
+        speed = self.calculate_speed()
+        self.x += speed * math.cos(self.heading)
+        self.y += speed * math.sin(self.heading)
 
-    def calculate_speed(self):
-        return (self.speed1 + self.speed2) * self.speedMultiplier / 2 
-   
-    def move(self, WIDTH, HEIGHT):
-        self.x += self.calculate_speed() * math.cos(self.heading)
-        self.y += self.calculate_speed() * math.sin(self.heading)
         self.heading += self.calculate_angular_speed()
 
-        # CONSTRAINTS
-        if self.x < 0:
-            self.x = 0
-        if self.x > WIDTH:
-            self.x = WIDTH
-        if self.y < 0:
-            self.y = 0
-        if self.y > HEIGHT:
-            self.y = HEIGHT
+        # CONSTRAINTS using built in function
+        self.x = max(0, min(WIDTH, self.x))
+        self.y = max(0, min(HEIGHT, self.y))
 
-    def vision(self, *balls):
-        angles = ()
-        for ball in balls:
-            # check if ball is within vision angle
-            angle = math.atan2((ball.y + 0.5 * ball.RADIUS) - (self.y + 0.5 * self.RADIUS), (ball.x + 0.5 * ball.RADIUS) - (self.x + 0.5 * self.RADIUS))
+    def vision(self, ball) -> bool:
+        '''
+        Get the angle to the ball if it is within the vision cone
+        '''
+        angle = math.atan2((ball.y + 0.5 * ball.RADIUS) - (self.y + 0.5 * self.RADIUS), (ball.x + 0.5 * ball.RADIUS) - (self.x + 0.5 * self.RADIUS))
 
-            diff = (angle - self.heading + math.pi) % (2 * math.pi) - math.pi
-            if abs(diff) < math.pi/4:
-                angles += (angle,)
-            else: 
-                angles += (False,)
+        diff = (angle - self.heading + math.pi) % (2 * math.pi) - math.pi
 
-        return angles
+        if abs(diff) < math.pi/4:
+            self.headingToBall = diff
+            return True
+        else:
+            self.headingToBall = 0
+            return False
+        
     
-    def inputsNN(self, angle):
-        dx = math.cos(angle)
-        dy = math.sin(angle)
-
-        vis = 1
-        if angle == False:
-            dx = 0
-            dy = 0
-            vis = 0
-
-        dhx = math.cos(self.heading)
-        dhy = math.sin(self.heading)
-
-        return [dx, dy, dhx, dhy, vis]
-
-    def set_speed(self, speed1, speed2):
-        self.speed1 = speed1
-        self.speed2 = speed2
-    
-    def draw(self, screen):
+    def draw(self, screen) -> None:
+        '''
+        Draw the robot on the screen
+        '''
         x, y = int(self.x), int(self.y)
         pygame.draw.circle(screen, (255, 0, 0), (x, y), self.RADIUS)
-        pygame.draw.line(screen, (0, 0, 255), (x, y), (int(self.x + 20 * math.cos(self.heading)), int(self.y + 20 * math.sin(self.heading))), 5)
-        # draw two more lines to represent the 'vision' of the robot, 45 degrees to the left and right
-        pygame.draw.line(screen, (0, 255, 255), (x, y), (int(self.x + self.visionLen * math.cos(self.heading + math.pi/4)), int(self.y + self.visionLen * math.sin(self.heading + math.pi/4))), 2)
-        pygame.draw.line(screen, (0, 255, 255), (x, y), (int(self.x + self.visionLen * math.cos(self.heading - math.pi/4)), int(self.y + self.visionLen * math.sin(self.heading - math.pi/4))), 2)
+        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 10 * math.cos(self.heading + math.pi/4)), int(self.y + 10 * math.sin(self.heading + math.pi/4))), 2)
+        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 10 * math.cos(self.heading - math.pi/4)), int(self.y + 10 * math.sin(self.heading - math.pi/4))), 2)
+

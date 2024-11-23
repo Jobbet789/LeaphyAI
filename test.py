@@ -1,7 +1,6 @@
 # Version 0.0.2
 import lib.Ball as Ball
 import lib.Robot as Robot
-import lib.DQLAgent as DQLAgent
 import lib.Window as Window
 
 import numpy as np
