@@ -80,6 +80,6 @@ class Robot:
         '''
         x, y = int(self.x), int(self.y)
         pygame.draw.circle(screen, (255, 0, 0), (x, y), self.RADIUS)
-        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 10 * math.cos(self.heading + math.pi/4)), int(self.y + 10 * math.sin(self.heading + math.pi/4))), 2)
-        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 10 * math.cos(self.heading - math.pi/4)), int(self.y + 10 * math.sin(self.heading - math.pi/4))), 2)
+        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 100 * math.cos(self.heading + math.pi/4)), int(self.y + 100 * math.sin(self.heading + math.pi/4))), 2)
+        pygame.draw.line(screen, (0, 255, 0), (x, y), (int(self.x + 100 * math.cos(self.heading - math.pi/4)), int(self.y + 100 * math.sin(self.heading - math.pi/4))), 2)
 
