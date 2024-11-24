@@ -13,6 +13,9 @@ import tensorflow as tf
 
 EPISODES = 1000
 
+ 
+# tensorflow==2.11.0
+
 # CONSTANTS
 
 class DQNAgent:
