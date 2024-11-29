@@ -44,15 +44,10 @@ class env:
         done = False
         distance = self.robot.distanceToBall(self.ball)
 
-        if self.ballVis:
-            reward += 1
-        else:
-            reward -= 1
-
         if distance < 10:
             reward += 50
             # more reward based on time
-            reward += 20 * (20*30 - time)
+            reward += 20 * (2000 - time) if 2000 - time >= 0 else 0
             done = True
 
         return self.get_state(), reward, done

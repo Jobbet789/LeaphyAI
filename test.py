@@ -33,8 +33,8 @@ class DQNAgent:
     def _build_model(self):
         model = tf.keras.models.Sequential()
         # model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        model.add(tf.keras.layers.Dense(128, input_dim=self.state_size, activation='relu'))
-        model.add(tf.keras.layers.Dense(128, activation='relu'))
+        model.add(tf.keras.layers.Dense(64, input_dim=self.state_size, activation='relu'))
+        model.add(tf.keras.layers.Dense(64, activation='relu'))
         model.add(tf.keras.layers.Dense(self.action_size, activation='tanh'))
         model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(lr=self.learning_rate))
         return model
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         state = env.reset()
         state = np.array(state)
         total_reward = 0
-        for time in range(20*30): # 20 seconds in 30 fps
+        for time in range(999999): # 20 seconds in 30 fps
             actions = agent.act(state)
             next_state, reward, done = env.step(actions, time)
             total_reward += reward
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
             env.render()
 
-            if done or time == 20*30-1:
+            if done or time == 999999-1:
                 if time < 599:
                     real = True
                 print("episode: {}/{}, score: {}, e: {:.2}, r: {}".format(e, EPISODES, time, agent.epsilon, total_reward))
