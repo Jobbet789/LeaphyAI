@@ -34,6 +34,27 @@ data = PackedVector3Array(-0.015, 0.25, 1.5, 0.015, 0.25, 1.5, -0.015, -0.25, 1.
 
 [node name="World" type="Node3D"]
 
+[node name="Robot" parent="." instance=ExtResource("2_sbi7l")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.34475, 0.858, 0)
+center_of_mass_mode = 0
+script = null
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.831722, 0.555193, 0, -0.555193, 0.831722, 0, 1.85396, 2.33663)
+visible = false
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.477036, 0.878884, 0, -0.878884, 0.477036, 0, 14.9813, 29.629)
+
+[node name="Ball2" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.60312, 0.412262, 0)
+
+[node name="Ball3" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.22279, 0.412262, 0)
+
+[node name="Ball1" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.801559, 0.490497, 0)
+
 [node name="Hall" type="Node3D" parent="."]
 metadata/_edit_group_ = true
 
@@ -96,22 +117,3 @@ skeleton = NodePath("../../Wall/Wall")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hall/Wall2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.265, 0.3, 0)
 shape = SubResource("ConcavePolygonShape3D_ecyqi")
-
-[node name="Robot" parent="." instance=ExtResource("2_sbi7l")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.34475, 0.858, 0)
-
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.831722, 0.555193, 0, -0.555193, 0.831722, 0, 1.85396, 2.33663)
-visible = false
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.477036, 0.878884, 0, -0.878884, 0.477036, 0, 14.9813, 29.629)
-
-[node name="Ball2" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.60312, 0.412262, 0)
-
-[node name="Ball3" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.22279, 0.412262, 0)
-
-[node name="Ball1" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.801559, 0.206131, 0)

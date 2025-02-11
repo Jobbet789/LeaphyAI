@@ -1,8 +1,4 @@
-extends CharacterBody3D
-
-const SPEED = 3
-const JUMP_VELOCITY = 4.5
-const gravity_accel = -9.81 * 5
+extends RigidBody3D
 
 var socket = StreamPeerTCP.new()
 var waiting_for_response = false
@@ -76,13 +72,13 @@ func _physics_process(delta: float):
 				var error = json.parse(response)
 				if error == OK:
 					var action = json.data
-					apply_action(action, delta)
+					apply_action(action)
 					waiting_for_response = false
 				else:
 					print("Error parsing JSON")
 					return
 	else:
-		apply_action([1.0, 1.0], delta)
+		apply_action([1.0, 1.0])
 
 	
 
@@ -158,6 +154,29 @@ func calculate_speed():
 func calculate_angular_speed():
 	return (motor_speeds[0] - motor_speeds[1]) * speed_multiplier / 2
 
+
+func apply_action(action):
+	# Update motor speeds based on the action received.
+	motor_speeds[0] = action[0]
+	motor_speeds[1] = action[1]
+
+	var speed = calculate_speed()
+	var angular_speed = calculate_angular_speed()
+
+	# Compute forward direction from the current Y-rotation.
+	# (In Godot, forward is usually -Z but the original code used (cos, sin) from rotation.y.)
+	var direction = Vector3(cos(rotation.y), 0, sin(rotation.y)).normalized()
+
+	# Get the current linear velocity so that we only override the X and Z components.
+	linear_velocity.x = direction.x * speed
+	linear_velocity.z = direction.z * speed
+
+	# Set angular velocity to rotate around the Y axis.
+	angular_velocity = Vector3(0, angular_speed, 0)
+
+
+
+"""
 func apply_action(action, delta):
 	# This is for no time scaling
 	# var delta_copy = delta 
@@ -179,6 +198,7 @@ func apply_action(action, delta):
 	rotation.y += angular_speed * delta_copy
 
 	move_and_slide()
+"""
 
 func reset_environment():
 	var count = 0

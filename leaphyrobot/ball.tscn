@@ -8,6 +8,7 @@ height = 0.2
 radius = 0.1
 
 [node name="Ball" type="RigidBody3D"]
+center_of_mass_mode = 1
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_e6q3f")
