@@ -1,0 +1,15 @@
+.godot/
+/android/
+
+__pycache__/
+
+venv/
+.venv/
+env/
+.env/
+
+.vscode/
+.idea/
+
+.env
+.env.*

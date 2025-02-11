@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3 uid="uid://lby36pac1tn4"]
+
+[ext_resource type="Script" path="res://robot.gd" id="1_qa228"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_w32tw"]
+height = 0.1
+radius = 0.25
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_uyed7"]
+top_radius = 0.25
+bottom_radius = 0.25
+height = 0.1
+
+[sub_resource type="BoxMesh" id="BoxMesh_lruim"]
+size = Vector3(0.02, 0.05, 0.5)
+
+[node name="Robot" type="CharacterBody3D"]
+script = ExtResource("1_qa228")
+metadata/_edit_group_ = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CylinderShape3D_w32tw")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CylinderMesh_uyed7")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0.268, 0.073, 0)
+mesh = SubResource("BoxMesh_lruim")
