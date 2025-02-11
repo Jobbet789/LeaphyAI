@@ -17,6 +17,8 @@ var detection_radius = 200
 var ballLoc = []
 var robotLoc = Vector3(0, 0, 0)
 
+const reward_progress_scale = 0.1
+
 
 
 func _ready():
@@ -111,25 +113,25 @@ func get_state():
 func calculate_reward():
 	var reward = 0.0
 
-	var target_corner = Vector3(10, 0, 10) # Change to actual corner pos
-	var corner_threshold = 20 # Change to actual threshold
-	var progress_scale = 0.1
-
 	for ball in get_tree().get_nodes_in_group("balls"):
-		var dist = ball.global_position.distance_to(target_corner)
-
-		if not ball.has_meta("prev_distance"):
-			ball.set_meta("prev_distance", dist)
-
 		var prev_dist = ball.get_meta("prev_distance")
+		var dist = global_position.distance_to(ball.global_position)
 
-		reward += (prev_dist - dist) * progress_scale
+		if prev_dist:
+			reward += (prev_dist - dist) * reward_progress_scale
 
 		ball.set_meta("prev_distance", dist)
+		
 
-		if dist < corner_threshold and not ball.has_meta("corner_reward_given"):
+
+		if ball.get_meta('inside_corner') and not ball.get_meta('corner_reward_given'):
 			reward += 10.0
 			ball.set_meta("corner_reward_given", true)
+
+		elif not ball.get_meta('inside_corner') and ball.get_meta('corner_reward_given'):
+			reward -= 10.0
+			ball.set_meta("corner_reward_given", false)
+
 		
 	reward -= 0.05 # Time penalty
 

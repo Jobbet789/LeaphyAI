@@ -1,18 +1,16 @@
-[gd_scene load_steps=6 format=3 uid="uid://lby36pac1tn4"]
-
-[ext_resource type="Script" path="res://robot.gd" id="1_qa228"]
+[gd_scene load_steps=5 format=3 uid="uid://lby36pac1tn4"]
 
 [sub_resource type="PhysicsMaterial" id="PhysicsMaterial_16l72"]
 friction = 0.0
 
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_w32tw"]
-height = 0.1
+height = 0.15
 radius = 0.25
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_uyed7"]
 top_radius = 0.25
 bottom_radius = 0.25
-height = 0.1
+height = 0.15
 
 [sub_resource type="BoxMesh" id="BoxMesh_lruim"]
 size = Vector3(0.02, 0.05, 0.5)
@@ -23,7 +21,6 @@ axis_lock_angular_z = true
 mass = 5.0
 physics_material_override = SubResource("PhysicsMaterial_16l72")
 center_of_mass_mode = 1
-script = ExtResource("1_qa228")
 metadata/_edit_group_ = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
