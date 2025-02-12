@@ -1,3 +1,10 @@
+"""
+TODO:
+- Camera simulation: if the ball isn't in the FOV, the robot can't detect it, gives [x. 0] as state
+	Also max dist to ball should not be INF
+"""
+
+
 extends RigidBody3D
 
 var socket = StreamPeerTCP.new()
@@ -7,6 +14,7 @@ var response_timeout = 1.0 # seconds
 
 var current_state = [0.0, 0.0]
 var episode_reward = 0.0
+var reward = 0.0
 
 var motor_speeds = [0.0, 0.0]
 var max_speed = 200
@@ -19,6 +27,16 @@ var robotLoc = Vector3(0, 0, 0)
 
 const reward_progress_scale = 0.1
 
+const max_iterations = 1000
+var iterations = 0
+var episode_count = 0
+
+var action = [0, 0]
+var state = [0, 0]
+var dist = INF
+var connection_status = "Disconnected"
+var response_time = 0.0
+var average_reward = 0.0
 
 
 func _ready():
@@ -46,9 +64,15 @@ func _physics_process(delta: float):
 			waiting_for_response = false
 
 	if socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		if connection_status != "Connected":
+			connection_status = "Connected"
+			print("Connected to server")
+		
+		response_time = Time.get_ticks_msec() / 1000.0 - last_request_time
+
 		if not waiting_for_response:
-			var state = get_state()
-			var reward = calculate_reward()
+			state = get_state()
+			calculate_reward()
 			var done = check_done()
 
 			# Send to Python server
@@ -61,19 +85,22 @@ func _physics_process(delta: float):
 
 			waiting_for_response = true
 			last_request_time = Time.get_ticks_msec() / 1000.0
+
 			episode_reward += reward
+			average_reward = episode_reward / (episode_count + 1)
 
 			if done:
 				print("Episode reward: ", episode_reward)
 				reset_environment()
 				episode_reward = 0.0
+				episode_count += 1
 		else:
 			if socket.get_available_bytes() > 0:
 				var response = socket.get_utf8_string(socket.get_available_bytes())
 				var json = JSON.new()
 				var error = json.parse(response)
 				if error == OK:
-					var action = json.data
+					action = json.data
 					apply_action(action)
 					waiting_for_response = false
 				else:
@@ -81,6 +108,10 @@ func _physics_process(delta: float):
 					return
 	else:
 		apply_action([1.0, 1.0])
+		if connection_status != "Disconnected":
+			connection_status = "Disconnected"
+			response_time = 0.0
+			print("Disconnected from server")
 
 	
 
@@ -111,11 +142,11 @@ func get_state():
 		return [0.0, 0]
 
 func calculate_reward():
-	var reward = 0.0
+	reward = 0.0
 
 	for ball in get_tree().get_nodes_in_group("balls"):
 		var prev_dist = ball.get_meta("prev_distance")
-		var dist = global_position.distance_to(ball.global_position)
+		dist = global_position.distance_to(ball.global_position)
 
 		if prev_dist:
 			reward += (prev_dist - dist) * reward_progress_scale
@@ -140,14 +171,20 @@ func calculate_reward():
 
 
 func check_done():
+	if iterations >= max_iterations:
+		iterations = 0
+		return true
+	iterations += 1
+
+
+
 	var in_corner = true
 	for ball in get_tree().get_nodes_in_group("balls"):
 		if ball.get_meta("corner_reward_given") == false:
 			in_corner = false
 			break
 	
-	#return in_corner
-	return false
+	return in_corner
 	
 
 func calculate_speed():
@@ -172,10 +209,10 @@ func apply_action(action):
 	# Get the current linear velocity so that we only override the X and Z components.
 	linear_velocity.x = direction.x * speed
 	linear_velocity.z = direction.z * speed
+	linear_velocity.y = 0
 
 	# Set angular velocity to rotate around the Y axis.
 	angular_velocity = Vector3(0, angular_speed, 0)
-
 
 
 """
