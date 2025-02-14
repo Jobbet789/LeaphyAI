@@ -16,19 +16,14 @@ var stats = [
 	{ "label": "Episode Count", "property": "episode_count", "format": "%d" },
 	{ "label": "Average Episode Reward", "property": "average_reward", "format": "%.3f" },
 	{ "label": "Reward for Current Action", "property": "reward", "format": "%.3f" },
-	{ "label": "Episode Reward", "property": "episode_reward", "format": "%.3f" },
 ]
 var value_labels = []
 
+
 func _ready():
-	var stats_panel = Panel.new()
-	stats_panel.size = Vector2(300, 1080)
-	add_child(stats_panel)
-	
 	robot = get_node("../../Robot")
-	
-	var vbox = VBoxContainer.new()
-	stats_panel.add_child(vbox)
+
+	var vbox = get_node("StatsPanel/VBox")
 	
 	for entry in stats:
 		var hbox = HBoxContainer.new()
@@ -41,7 +36,7 @@ func _ready():
 		vbox.add_child(hbox)
 		value_labels.append(value_label)
 
-func _process(delta):
+func _process(_delta):
 	for i in range(stats.size()):
 		var entry = stats[i]
 		var value_label = value_labels[i]

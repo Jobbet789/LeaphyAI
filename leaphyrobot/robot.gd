@@ -8,7 +8,6 @@ TODO:
 extends RigidBody3D
 
 var socket = StreamPeerTCP.new()
-var waiting_for_response = false
 var last_request_time = 0.0
 var response_timeout = 1.0 # seconds
 
@@ -20,8 +19,6 @@ var motor_speeds = [0.0, 0.0]
 var max_speed = 200
 const speed_multiplier = 1
 
-var detection_radius = 200
-
 var ballLoc = []
 var robotLoc = Vector3(0, 0, 0)
 
@@ -31,17 +28,21 @@ const max_iterations = 1000
 var iterations = 0
 var episode_count = 0
 
-var action = [0, 0]
+var action = [1.0, 1.0]
 var state = [0, 0]
 var dist = INF
 var connection_status = "Disconnected"
 var response_time = 0.0
 var average_reward = 0.0
+var total_reward = 0.0
+
+var camera = null
 
 
 func _ready():
-	socket.set_no_delay(true)
 	var error = socket.connect_to_host("127.0.0.1", 65432)
+
+	camera = get_node("Camera3D")
 
 	if error != OK:
 		print("Je bent niet bijzonder, Job, ik kan ook tellen!")
@@ -55,94 +56,97 @@ func _ready():
 
 
 
-func _physics_process(delta: float):
-	socket.poll()
 
-	if waiting_for_response:
-		if Time.get_ticks_msec() / 1000.0 - last_request_time > response_timeout:
-			print("Response timeout")
-			waiting_for_response = false
+func _physics_process(_delta):
+	socket.poll()
 
 	if socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		if connection_status != "Connected":
 			connection_status = "Connected"
 			print("Connected to server")
 		
-		response_time = Time.get_ticks_msec() / 1000.0 - last_request_time
 
-		if not waiting_for_response:
-			state = get_state()
-			calculate_reward()
-			var done = check_done()
+		state = get_state()
+		calculate_reward()
+		var done = check_done()
 
-			# Send to Python server
-			var data = {
-				"state": state,
-				"reward": reward,
-				"done": done
-			}
-			socket.put_utf8_string(JSON.stringify(data) + "\n")
+		# Send to Python server
+		var data = {
+			"state": state,
+			"reward": reward,
+			"done": done
+		}
+		socket.put_utf8_string(JSON.stringify(data) + "\n")
 
-			waiting_for_response = true
-			last_request_time = Time.get_ticks_msec() / 1000.0
+		last_request_time = Time.get_ticks_msec() / 1000.0
 
-			episode_reward += reward
-			average_reward = episode_reward / (episode_count + 1)
+		episode_reward += reward
+		total_reward += reward
+		average_reward = total_reward / (episode_count + 1)
 
-			if done:
-				print("Episode reward: ", episode_reward)
-				reset_environment()
-				episode_reward = 0.0
-				episode_count += 1
-		else:
-			if socket.get_available_bytes() > 0:
-				var response = socket.get_utf8_string(socket.get_available_bytes())
-				var json = JSON.new()
-				var error = json.parse(response)
-				if error == OK:
-					action = json.data
-					apply_action(action)
-					waiting_for_response = false
-				else:
-					print("Error parsing JSON")
-					return
+		if done:
+			print("Episode reward: ", episode_reward)
+			reset_environment()
+			episode_reward = 0.0
+			episode_count += 1
+			return
+
+
+		if socket.get_available_bytes() > 0:
+			var response = socket.get_utf8_string(socket.get_available_bytes())
+			var json = JSON.new()
+			var error = json.parse(response)
+			if error == OK:
+				response_time = Time.get_ticks_msec() / 1000.0 - last_request_time
+				action = json.data
+				action = [1, -1]
+				apply_action()
+			else:
+				print("Error parsing JSON")
+				return
 	else:
-		apply_action([1.0, 1.0])
+		apply_action()
 		if connection_status != "Disconnected":
 			connection_status = "Disconnected"
 			response_time = 0.0
 			print("Disconnected from server")
 
-	
-
 func get_state():
-	# Same as previous implementation
-	# Return [angle_to_nearest_ball, detection_flag]
-	# angle_to_nearest_ball: angle between robot and nearest ball in radians
-	# detection_flag: 1 if ball is detected, 0 otherwise
+	var fov_limit: float = 45.0
 
-	var balls = get_tree().get_nodes_in_group("balls")
-	var closest_ball = null
-	var min_dist = INF
+	var closest_angle = false
+	var closest_distance = INF
+	var found = false
 
-	for ball in balls:
-		var dist = global_position.distance_to(ball.global_position)
-		if dist < min_dist:
-			min_dist = dist
-			closest_ball = ball
+	var forward = -global_transform.basis.z
+	var forward_flat = Vector2(forward.x, forward.z).normalized()
+	var self_flat = Vector2(global_transform.origin.x, global_transform.origin.z)
+
+	for ball in get_tree().get_nodes_in_group("balls"):
+		var ball_flat = Vector2(ball.global_transform.origin.x, ball.global_transform.origin.z)
+		var to_ball = ball_flat - self_flat
+		var distance = to_ball.length()
+
+		var to_ball_norm = to_ball.normalized()
+
+		var dot_val = forward_flat.dot(to_ball_norm)
+		dot_val = clamp(dot_val, -1, 1)
+
+		var angle = acos(dot_val) / PI
+
+
+		if angle <= fov_limit:
+			if distance < closest_distance:
+				closest_distance = distance
+				closest_angle = angle
+				found = true
 	
-	if closest_ball:
-		var direction = closest_ball.global_position - global_position
-		var angle = direction.angle_to(Vector3(1, 0, 0)) - rotation.y
-
-		angle = fposmod(angle + PI, TAU) - PI
-
-		return [angle / PI, 1.0 if min_dist < detection_radius else 0.0]
-	else:
-		return [0.0, 0]
+	return [closest_angle, 1.0 if closest_angle else 0.0]
+	
 
 func calculate_reward():
 	reward = 0.0
+	dist = INF
 
 	for ball in get_tree().get_nodes_in_group("balls"):
 		var prev_dist = ball.get_meta("prev_distance")
@@ -169,14 +173,11 @@ func calculate_reward():
 	return reward
 
 
-
 func check_done():
 	if iterations >= max_iterations:
 		iterations = 0
 		return true
 	iterations += 1
-
-
 
 	var in_corner = true
 	for ball in get_tree().get_nodes_in_group("balls"):
@@ -194,7 +195,7 @@ func calculate_angular_speed():
 	return (motor_speeds[0] - motor_speeds[1]) * speed_multiplier / 2
 
 
-func apply_action(action):
+func apply_action():
 	# Update motor speeds based on the action received.
 	motor_speeds[0] = action[0]
 	motor_speeds[1] = action[1]
@@ -214,31 +215,6 @@ func apply_action(action):
 	# Set angular velocity to rotate around the Y axis.
 	angular_velocity = Vector3(0, angular_speed, 0)
 
-
-"""
-func apply_action(action, delta):
-	# This is for no time scaling
-	# var delta_copy = delta 
-	var delta_copy = 1
-
-	motor_speeds[0] = action[0]
-	motor_speeds[1] = action[1]
-
-	if not is_on_floor():
-		velocity.y += gravity_accel * delta_copy
-
-	var speed = calculate_speed() * delta_copy
-	var angular_speed = calculate_angular_speed() * delta_copy
-
-	var direction = Vector3(cos(rotation.y), 0, sin(rotation.y)).normalized()
-
-	velocity.x = direction.x * speed
-	velocity.z = direction.z * speed
-	rotation.y += angular_speed * delta_copy
-
-	move_and_slide()
-"""
-
 func reset_environment():
 	var count = 0
 
@@ -247,6 +223,8 @@ func reset_environment():
 		ball.set_meta("corner_reward_given", false)
 
 		ball.global_position = ballLoc[count]
+
+		ball.linear_velocity = Vector3(0, 0, 0)
 		count += 1
 	
 	global_position = robotLoc
