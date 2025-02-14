@@ -22,7 +22,7 @@ const speed_multiplier = 1
 var ballLoc = []
 var robotLoc = Vector3(0, 0, 0)
 
-const reward_progress_scale = 0.1
+const reward_progress_scale = 1
 
 const max_iterations = 1000
 var iterations = 0
@@ -99,7 +99,7 @@ func _physics_process(_delta):
 			if error == OK:
 				response_time = Time.get_ticks_msec() / 1000.0 - last_request_time
 				action = json.data
-				action = [1, -1]
+				#action = [1.0, -1.0]
 				apply_action()
 			else:
 				print("Error parsing JSON")
@@ -111,38 +111,72 @@ func _physics_process(_delta):
 			response_time = 0.0
 			print("Disconnected from server")
 
+# Returns the signed angle difference (in radians) between the node's forward
+# (as determined by -global_transform.basis.z) and the direction toward the ball,
+# but only if the ball lies within a 45° field-of-view.
+# Otherwise, it returns null.
+func vision(ball):
+	# Calculate the vector from this node to the ball and ignore the Y component.
+	var to_ball: Vector3 = ball.global_position - global_position
+	to_ball.y = 0
+	
+	# If the ball is exactly at our position, we can’t compute an angle.
+	if to_ball.length() == 0:
+		return null
+	to_ball = to_ball.normalized()
+	
+	# Determine the node's forward direction.
+	# In Godot, a Node3D's forward is usually defined as -Z.
+	var forward: Vector3 = -global_transform.basis.x
+	forward.y = 0
+	forward = forward.normalized()
+	forward = Vector3(forward.x * -1, 0, forward.z * -1)
+	
+	# Compute the unsigned angle between forward and the direction to the ball.
+	var angle_diff: float = forward.angle_to(to_ball)
+	
+	# Determine the sign of the angle using the cross product.
+	# If the Y component is negative, the angle is negative.
+	var cross_sign: float = forward.cross(to_ball).y
+	if cross_sign < 0:
+		angle_diff = -angle_diff
+	
+	# If the ball is within a 45° field-of-view, return the angle.
+	if abs(angle_diff) < PI / 4:
+		return angle_diff
+	else:
+		return null
+
+# Computes the distance from this node to the ball in the XZ plane.
+func distance_to_ball(ball):
+	var diff: Vector3 = ball.global_position - global_position
+	diff.y = 0
+	return diff.length()
+
+# Loops through all nodes in the "balls" group, finds the closest ball within vision,
+# and returns an array: [normalized_angle, 1.0]. If no ball is found, returns [0.0, 0.0].
 func get_state():
-	var fov_limit: float = 45.0
-
-	var closest_angle = false
-	var closest_distance = INF
-	var found = false
-
-	var forward = -global_transform.basis.z
-	var forward_flat = Vector2(forward.x, forward.z).normalized()
-	var self_flat = Vector2(global_transform.origin.x, global_transform.origin.z)
-
-	for ball in get_tree().get_nodes_in_group("balls"):
-		var ball_flat = Vector2(ball.global_transform.origin.x, ball.global_transform.origin.z)
-		var to_ball = ball_flat - self_flat
-		var distance = to_ball.length()
-
-		var to_ball_norm = to_ball.normalized()
-
-		var dot_val = forward_flat.dot(to_ball_norm)
-		dot_val = clamp(dot_val, -1, 1)
-
-		var angle = acos(dot_val) / PI
-
-
-		if angle <= fov_limit:
-			if distance < closest_distance:
-				closest_distance = distance
-				closest_angle = angle
-				found = true
+	var balls: Array = get_tree().get_nodes_in_group("balls")
+	var chosen_angle: float = 0.0
+	var closest_distance: float = INF
 	
-	return [closest_angle, 1.0 if closest_angle else 0.0]
+	for ball in balls:
+		var angle_diff = vision(ball)
+		# Use an explicit check against null so an angle_diff of 0.0 is valid.
+		if angle_diff != null:
+			var d: float = distance_to_ball(ball)
+			if d < closest_distance:
+				closest_distance = d
+				chosen_angle = angle_diff
 	
+	# If no ball was found within our FOV, return [0.0, 0.0].
+	if closest_distance == INF:
+		return [0.0, 0.0]
+		
+	# Otherwise, return the normalized angle (divided by PI) and a signal of 1.0.
+	return [chosen_angle / PI, 1.0]
+
+
 
 func calculate_reward():
 	reward = 0.0
