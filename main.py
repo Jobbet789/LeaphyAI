@@ -12,15 +12,14 @@ import torch.nn.functional as F
 import numpy as np
 from collections import deque
 
-
-
+#from visualization import NetworkVisualizer
 
 class Actor(nn.Module): # Known as DQN for the commented code
     def __init__(self, state_size, action_size):
         super().__init__()
         self.fc1 = nn.Linear(state_size, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, action_size)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, action_size)
     
     def forward(self, state):
         x = F.relu(self.fc1(state))
@@ -33,8 +32,8 @@ class Critic(nn.Module):
         super().__init__()
         # The critic takes both state and action as input.
         self.fc1 = nn.Linear(state_size + action_size, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, 1)
     
     def forward(self, state, action):
         # Concatenate state and action along the feature dimension.
@@ -135,6 +134,8 @@ class TrainingServer:
         self.sock.bind(('localhost', 65432))
         self.sock.listen(1)
         print("Training server started on port 65432")
+        #self.visualizer = NetworkVisualizer(self.agent.actor)
+        #self.visualizer.start()
     
     def handle_client(self, conn):
         prev_state = None
