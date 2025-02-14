@@ -127,9 +127,13 @@ class DDPGAgent:
 # ----- Training Server (Modified to Use the DDPG Agent) -----
 
 class TrainingServer:
-    def __init__(self):
+    def __init__(self, use_saved_models):
         # Adjust state_size and action_size as needed.
         self.agent = DDPGAgent(state_size=2, action_size=2)
+        if use_saved_models:
+            self.agent.actor.load_state_dict(torch.load('actor_model.pth'))
+            self.agent.critic.load_state_dict(torch.load('critic_model.pth'))
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind(('localhost', 65432))
         self.sock.listen(1)
@@ -196,5 +200,8 @@ class TrainingServer:
             
 
 if __name__ == "__main__":
-    server = TrainingServer()
+    if input("> Use saved models? (y/n): ").lower() == 'y':
+        server = TrainingServer(True)
+    else:
+        server = TrainingServer(False)
     server.run()

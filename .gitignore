@@ -14,9 +14,6 @@ env/
 .env
 .env.*
 
-actor_model.pth
-critic_model.pth
-
 DommeBaby.exe
 DommeBaby.pck
 DommeBaby.console.exe
