@@ -51,14 +51,17 @@ class DDPGAgent:
         
         # Replay buffer
         self.memory = deque(maxlen=2000)
+
+        # Add device detection
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Actor and Critic Networks
-        self.actor = Actor(state_size, action_size)
-        self.critic = Critic(state_size, action_size)
+        self.actor = Actor(state_size, action_size).to(self.device)
+        self.critic = Critic(state_size, action_size).to(self.device)
         
         # Target networks
-        self.target_actor = copy.deepcopy(self.actor)
-        self.target_critic = copy.deepcopy(self.critic)
+        self.target_actor = copy.deepcopy(self.actor).to(self.device)
+        self.target_critic = copy.deepcopy(self.critic).to(self.device)
         
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.001)
@@ -67,10 +70,11 @@ class DDPGAgent:
         self.memory.append((state, action, reward, next_state, done))
     
     def act(self, state, noise_scale=0.1):
-        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         self.actor.eval()
         with torch.no_grad():
-            action = self.actor(state_tensor).squeeze(0).numpy()
+            action = self.actor(state_tensor).squeeze(0)
+            action = action.cpu().numpy()
         self.actor.train()
         # Add exploration noise
         noise = noise_scale * np.random.randn(self.action_size)
@@ -82,11 +86,13 @@ class DDPGAgent:
         
         minibatch = random.sample(self.memory, self.batch_size)
         minibatch = np.array(minibatch, dtype=object)
-        states = torch.FloatTensor(np.array(minibatch[:, 0].tolist()))
-        actions = torch.FloatTensor(np.array(minibatch[:, 1].tolist()))
-        rewards = torch.FloatTensor(np.array(minibatch[:, 2].tolist())).unsqueeze(1)
-        next_states = torch.FloatTensor(np.array(minibatch[:, 3].tolist()))
-        dones = torch.FloatTensor(np.array(minibatch[:, 4].tolist(), dtype=float)).unsqueeze(1)
+
+        # Move tensors to device
+        states = torch.FloatTensor(np.array(minibatch[:, 0].tolist())).to(self.device)
+        actions = torch.FloatTensor(np.array(minibatch[:, 1].tolist())).to(self.device)
+        rewards = torch.FloatTensor(np.array(minibatch[:, 2].tolist())).unsqueeze(1).to(self.device)
+        next_states = torch.FloatTensor(np.array(minibatch[:, 3].tolist())).to(self.device)
+        dones = torch.FloatTensor(np.array(minibatch[:, 4].tolist(), dtype=float)).unsqueeze(1).to(self.device)
         
         # ----- Update Critic -----
         # Compute target actions and Q-values

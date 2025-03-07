@@ -13,6 +13,9 @@ import argparse
 from game import Game
 from ddpg_agent import DDPGAgent
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
 # Set seeds for reproducibility
 RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
@@ -43,11 +46,17 @@ class TrainingCheckpoint:
         model_path = os.path.join(self.checkpoint_dir, f"models_episode_{episode}")
         os.makedirs(model_path, exist_ok=True)
         
-        # Save models
-        torch.save(agent.actor.state_dict(), os.path.join(model_path, "actor.pth"))
-        torch.save(agent.critic.state_dict(), os.path.join(model_path, "critic.pth"))
-        torch.save(agent.target_actor.state_dict(), os.path.join(model_path, "target_actor.pth"))
-        torch.save(agent.target_critic.state_dict(), os.path.join(model_path, "target_critic.pth"))
+        # Save models (move to CPU before saving)
+        torch.save(agent.actor.cpu().state_dict(), os.path.join(model_path, "actor.pth"))
+        torch.save(agent.critic.cpu().state_dict(), os.path.join(model_path, "critic.pth"))
+        torch.save(agent.target_actor.cpu().state_dict(), os.path.join(model_path, "target_actor.pth"))
+        torch.save(agent.target_critic.cpu().state_dict(), os.path.join(model_path, "target_critic.pth"))
+    
+        # Make sure to move models back to GPU after saving
+        agent.actor.to(agent.device)
+        agent.critic.to(agent.device)
+        agent.target_actor.to(agent.device)
+        agent.target_critic.to(agent.device)
         
         # Save optimizer states
         torch.save(agent.actor_optimizer.state_dict(), os.path.join(model_path, "actor_optimizer.pth"))
@@ -89,11 +98,11 @@ class TrainingCheckpoint:
         with open(checkpoint_path, 'rb') as f:
             checkpoint_data = pickle.load(f)
         
-        # Restore models
-        agent.actor.load_state_dict(torch.load(os.path.join(model_path, "actor.pth")))
-        agent.critic.load_state_dict(torch.load(os.path.join(model_path, "critic.pth")))
-        agent.target_actor.load_state_dict(torch.load(os.path.join(model_path, "target_actor.pth")))
-        agent.target_critic.load_state_dict(torch.load(os.path.join(model_path, "target_critic.pth")))
+        # Load models directly to the device
+        agent.actor.load_state_dict(torch.load(os.path.join(model_path, "actor.pth"), map_location=agent.device))
+        agent.critic.load_state_dict(torch.load(os.path.join(model_path, "critic.pth"), map_location=agent.device))
+        agent.target_actor.load_state_dict(torch.load(os.path.join(model_path, "target_actor.pth"), map_location=agent.device))
+        agent.target_critic.load_state_dict(torch.load(os.path.join(model_path, "target_critic.pth"), map_location=agent.device))
         
         # Restore optimizer states
         agent.actor_optimizer.load_state_dict(torch.load(os.path.join(model_path, "actor_optimizer.pth")))

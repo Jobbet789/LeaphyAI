@@ -21,3 +21,8 @@ DommeBaby.console.exe
 rewards.txt
 
 /checkpoints/
+
+actor_episode_*.pth
+critic_episode_*.pth
+best_actor.pth
+best_critic.pth
