@@ -211,9 +211,9 @@ class Game:
         if self.rendered:
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
             pygame.display.set_caption("Robot and Balls Physics Simulation")
-        else:
+        # else:
             # Create a minimal environment for headless operation
-            pygame.display.set_mode((1, 1), pygame.NOFRAME)
+            # pygame.display.set_mode((1, 1), pygame.NOFRAME)
         
         # Create robot away from the balls
         self.robot = Robot(WIDTH // 4, HEIGHT // 2)
