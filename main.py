@@ -257,8 +257,6 @@ def train(resume_training=False):
             
             # Save model and checkpoint periodically
             if episode % SAVE_MODEL_EVERY == 0:
-                torch.save(agent.actor.state_dict(), f'actor_episode_{episode}.pth')
-                torch.save(agent.critic.state_dict(), f'critic_episode_{episode}.pth')
                 # Save checkpoint
                 checkpoint_handler.save_checkpoint(
                     agent, episode, noise_scale, all_rewards, 
