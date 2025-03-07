@@ -24,7 +24,7 @@ torch.manual_seed(RANDOM_SEED)
 
 # Training hyperparameters
 EPISODES = 10000
-MAX_STEPS = 1000
+MAX_STEPS = 200
 SAVE_MODEL_EVERY = 200  # Save model weights every N episodes
 PRINT_EVERY = 10  # Print stats every N episodes
 
@@ -158,7 +158,7 @@ def train(resume_training=False):
     checkpoint_handler = TrainingCheckpoint()
     
     # Initialize the game (non-rendered for faster training)
-    game = Game(rendered=False)
+    game = Game(rendered=False, physics_steps=5)
     
     # Get state size and action size
     state = game.get_state()
@@ -279,7 +279,7 @@ def train(resume_training=False):
 def test(model_path='best_actor.pth', episodes=10):
     """Test the trained model"""
     # Initialize the game in rendered mode
-    game = Game(rendered=True)
+    game = Game(rendered=True, physics_steps=5)
     
     # Get state size and action size
     state = game.get_state()

@@ -201,8 +201,9 @@ def create_pool_formation(center_x, center_y, ball_radius=15):
     ]
 
 class Game:
-    def __init__(self, rendered=True):
+    def __init__(self, rendered=True, physics_steps=1):
         self.rendered = rendered
+        self.physics_steps = physics_steps
         self.clock = pygame.time.Clock()
         self.running = True
         
@@ -393,36 +394,42 @@ class Game:
         """
         # Set robot action
         self.robot.set_action([motor_left, motor_right])
+
+        total_reward = 0
         
-        # Update physics (use fixed time step for consistent physics)
-        if self.rendered:
-            # In rendered mode, get the actual time delta
-            self.dt = self.clock.tick(FPS) / 1000.0
-        # else use the fixed dt defined in __init__
-        
-        # Update all objects
-        for obj in self.all_objects:
-            obj.update(self.dt)
-        
-        # Check for collisions between all objects
-        for i in range(len(self.all_objects)):
-            for j in range(i + 1, len(self.all_objects)):
-                if self.all_objects[i].check_collision(self.all_objects[j]):
-                    self.all_objects[i].resolve_collision(self.all_objects[j])
-        
-        # Calculate reward
-        reward = self.calculate_reward()
-        
-        # Check if episode is done
-        if not self.done:  # Only check if not already done
-            self.done = self.check_completion()
+        # Run multiple physcics steps per action
+        for _ in range(self.physics_steps):
+            # Update physics (use fixed time step for consistent physics)
+            if self.rendered:
+                # In rendered mode, get the actual time delta
+                self.dt = self.clock.tick(FPS) / 1000.0
+            # else use the fixed dt defined in __init__
             
-            # Give a completion reward if we just finished
-            if self.done:
-                reward += 50.0  # Big reward for maintaining all balls in target
+            # Update all objects
+            for obj in self.all_objects:
+                obj.update(self.dt)
+            
+            # Check for collisions between all objects
+            for i in range(len(self.all_objects)):
+                for j in range(i + 1, len(self.all_objects)):
+                    if self.all_objects[i].check_collision(self.all_objects[j]):
+                        self.all_objects[i].resolve_collision(self.all_objects[j])
+            
+            # Calculate reward
+            step_reward = self.calculate_reward()
+            total_reward += step_reward
+            
+            # Check if episode is done
+            if not self.done:  # Only check if not already done
+                self.done = self.check_completion()
+                
+                # Give a completion reward if we just finished
+                if self.done:
+                    total_reward += 50.0  # Big reward for maintaining all balls in target
+                    break
         
         # Return state, reward, and done flag
-        return self.get_state(), reward, self.done
+        return self.get_state(), total_reward, self.done
     
     def get_state(self):
         """Return positions of all objects"""
@@ -508,27 +515,3 @@ class Game:
         
         pygame.quit()
         sys.exit()
-"""
-# Example usage for rendered mode
-if __name__ == "__main__":
-    # Rendered mode (default)
-    game = Game(rendered=True)
-    game.run()
-    
-    # Example of non-rendered mode:
-    """
-"""
-    game = Game(rendered=False)
-    total_reward = 0
-    done = False
-    
-    for i in range(1000):  # Run for 1000 frames or until done
-        # Apply some action
-        positions, reward, done = game.action(0.5, 0.5)  # Move forward
-        total_reward += reward
-        print(f"Frame {i}: Reward: {reward:.2f}, Total: {total_reward:.2f}, Done: {done}")
-        
-        if done:
-            print("Task complete!")
-            break
-"""
