@@ -261,6 +261,16 @@ func reset_environment():
 		ball.linear_velocity = Vector3(0, 0, 0)
 		count += 1
 	
-	global_position = robotLoc
+	global_position = get_random_loc(robotLoc)
 
-	rotation.y = 0
+	# rotation.y = 0
+	rotation.y = randf_range(-PI / 4, PI / 4)
+
+
+func get_random_loc(original_loc):
+	# get the current location, and add a random value to it +/- 0.75 for z and +/- 0.25 for x
+	var x = original_loc.x + randf_range(-0.25, 0.25)
+	var z = original_loc.z + randf_range(-0.75, 0.75)
+	var y = original_loc.y
+
+	return Vector3(x, y, z)

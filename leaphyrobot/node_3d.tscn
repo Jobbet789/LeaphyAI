@@ -58,13 +58,13 @@ environment = SubResource("Environment_pb6y0")
 transform = Transform3D(1, 0, 0, 0, 0.477036, 0.878884, 0, -0.878884, 0.477036, 0, 14.9813, 29.629)
 
 [node name="Ball2" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.60312, 0.56472, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.22996, 0.56472, -0.072604)
 
 [node name="Ball3" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.22279, 0.56472, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.22279, 0.56472, 0.0773523)
 
 [node name="Ball1" parent="." groups=["balls"] instance=ExtResource("3_f8kbe")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.801559, 0.64296, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.091, 0.551597, 0)
 
 [node name="Hall" type="Node3D" parent="."]
 metadata/_edit_group_ = true

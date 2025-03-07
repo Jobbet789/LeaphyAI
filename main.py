@@ -145,57 +145,66 @@ class TrainingServer:
         prev_state = None
         prev_action = None
         episode = 0 
-        total_episodes = 1000
+        total_episodes = 100
         
-        try:
-            while episode < total_episodes:
-                # Receive state from client
-                data = conn.recv(1024).decode()
-                if not data:
-                    break
-                try:
-                    msg = json.loads(data)
-                    state = msg['state']
-                    reward = msg['reward']
-                    done = msg['done']
-                except (KeyError, json.JSONDecodeError):
-                    continue
-                
-                # Store experience and train
-                if prev_state is not None:
-                    self.agent.remember(prev_state, prev_action, reward, state, done)
-                    self.agent.replay()
-                
-                # Get next action (with exploration noise)
-                action = self.agent.act(state)
-                
-                # Send action to client
-                conn.send(json.dumps(action.tolist()).encode())
-                
-                # Update previous state and action
-                prev_state = state
-                prev_action = action
-                
-                if done:
-                    episode += 1
-                    prev_state = None
-                    prev_action = None
-                    print(f"Episode {episode}/{total_episodes}")
+        while True:
+            try:
+                while episode < total_episodes:
+                    # Receive state from client
+                    data = conn.recv(1024).decode()
+                    if not data:
+                        break
+                    try:
+                        msg = json.loads(data)
+                        state = msg['state']
+                        reward = msg['reward']
+                        done = msg['done']
+                    except (KeyError, json.JSONDecodeError):
+                        continue
                     
-        except ConnectionResetError:
-            pass
-        finally:
-            conn.close()
-            torch.save(self.agent.actor.state_dict(), 'actor_model.pth')
-            torch.save(self.agent.critic.state_dict(), 'critic_model.pth')
-            print("Models saved")
+                    # Store experience and train
+                    if prev_state is not None:
+                        self.agent.remember(prev_state, prev_action, reward, state, done)
+                        self.agent.replay()
+                    
+                    # Get next action (with exploration noise)
+                    action = self.agent.act(state)
+                    
+                    # Send action to client
+                    conn.send(json.dumps(action.tolist()).encode())
+                    
+                    # Update previous state and action
+                    prev_state = state
+                    prev_action = action
+                    
+                    if done:
+                        episode += 1
+                        prev_state = None
+                        prev_action = None
+                        print(f"Episode {episode}/{total_episodes}")
+                
+                torch.save(self.agent.actor.state_dict(), 'actor_model.pth')
+                torch.save(self.agent.critic.state_dict(), 'critic_model.pth')
+                print("Models saved")
+                episode = 0
+                        
+            except ConnectionResetError:
+                pass
+
+            finally:
+                conn.close()
+                torch.save(self.agent.actor.state_dict(), 'actor_model.pth')
+                torch.save(self.agent.critic.state_dict(), 'critic_model.pth')
+                print("Models saved")
     
     def run(self):
-        while True:
-            conn, addr = self.sock.accept()
-            print(f"Connected to {addr}")
-            client_thread = threading.Thread(target=self.handle_client, args=(conn,))
-            client_thread.start()
+        conn, addr = self.sock.accept()
+        print(f"Connected to {addr}")
+        # client_thread = threading.Thread(target=self.handle_client, args=(conn,))
+        # client_thread.start()
+        self.handle_client(conn)
+        self.sock.close()
+
 
             
 
