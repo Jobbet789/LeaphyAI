@@ -22,6 +22,8 @@ TARGET_SIZE = 150
 TARGET_X = WIDTH - WALL_THICKNESS - TARGET_SIZE
 TARGET_Y = HEIGHT - WALL_THICKNESS - TARGET_SIZE
 
+MAX_DISTANCE = math.sqrt(WIDTH**2 + HEIGHT**2)  # Maximum distance in the environment
+
 # Define constants for completion detection
 FRAMES_FOR_COMPLETION = 60  # Number of frames all balls must remain in target to be "done"
 
@@ -304,15 +306,23 @@ class Game:
             float: The calculated reward
         """
         reward = 0
-        
+    
         # Small time penalty to encourage efficiency
         reward -= 0.01
         
         # Target center coordinates
         target_center_x = TARGET_X + TARGET_SIZE/2
         target_center_y = TARGET_Y + TARGET_SIZE/2
+
+        # Current robot center coordinates
+        robot_center_x = self.robot.x + self.robot.radius
+        robot_center_y = self.robot.y + self.robot.radius
+
+        closest_ball_dist = math.inf
+        closest_ball_prev_dist = math.inf
+        closest_ball_idx = -1
         
-        # Check each ball's position relative to target
+        # Ball rewards calculation
         balls_to_remove = []
         
         for i, ball in enumerate(self.balls):
@@ -334,7 +344,30 @@ class Game:
                                     (self.prev_ball_positions[i][1] - target_center_y)**2)
                 
                 # Reward for moving toward target (raw distance difference)
-                reward += (prev_dist - current_dist)
+                reward += 100 * ((prev_dist - current_dist)/MAX_DISTANCE)
+
+                # Find the closest ball to the robot
+                current_dist_robot = math.sqrt((ball.x - robot_center_x)**2 + (ball.y - robot_center_y)**2)
+                
+                if current_dist_robot < closest_ball_dist:
+                    closest_ball_dist = current_dist_robot
+                    closest_ball_idx = i
+        
+        # Calculate the robot-to-closest-ball reward using previous robot position
+        if closest_ball_idx >= 0 and hasattr(self, 'prev_robot_position'):
+            prev_robot_center_x = self.prev_robot_position[0] + self.robot.radius
+            prev_robot_center_y = self.prev_robot_position[1] + self.robot.radius
+            
+            closest_ball_prev_dist = math.sqrt(
+                (self.prev_ball_positions[closest_ball_idx][0] - prev_robot_center_x)**2 +
+                (self.prev_ball_positions[closest_ball_idx][1] - prev_robot_center_y)**2
+            )
+            
+            # Now calculate the reward for getting closer to the closest ball
+            reward += 5 * ((closest_ball_prev_dist - closest_ball_dist)/MAX_DISTANCE)
+        
+        # Store current robot position for next calculation
+        self.prev_robot_position = (self.robot.x, self.robot.y)
         
         # Update previous positions for next calculation (only for balls still in play)
         self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls if ball not in self.removed_balls]

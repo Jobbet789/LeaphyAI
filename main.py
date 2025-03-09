@@ -367,6 +367,31 @@ def play(episodes=10):
     
     pygame.quit()
 
+
+def clean():
+    """Clean up the training directory"""
+    # Remove checkpoints
+    for f in os.listdir("checkpoints"):
+        # if it's a file, remove it, if its a directory remove it and its contents 
+        if os.path.isfile(os.path.join("checkpoints", f)):
+            os.remove(os.path.join("checkpoints", f))
+        else:
+            for ff in os.listdir(os.path.join("checkpoints", f)):
+                os.remove(os.path.join("checkpoints", f, ff))
+            os.rmdir(os.path.join("checkpoints", f))
+        
+    # Remove models, 'best_critic.pth' and 'best_actor.pth'
+    if os.path.exists("best_critic.pth"):
+        os.remove("best_critic.pth")
+    if os.path.exists("best_actor.pth"):
+        os.remove("best_actor.pth")
+        
+    # Remove rewards file
+    if os.path.exists("rewards.txt"):
+        os.remove("rewards.txt")
+        
+    print("Training directory cleaned.")
+
 if __name__ == "__main__":
     # Initialize pygame
     pygame.init()
@@ -381,10 +406,14 @@ if __name__ == "__main__":
                         help='Model path for testing')
     parser.add_argument('--episodes', type=int, default=10,
                         help='Number of episodes for testing')
+    parser.add_argument('--clean', action='store_true',
+                        help='Clean up the training directory')
     
     args = parser.parse_args()
     
     try:
+        if args.clean:
+            clean()
         if args.mode == 'train':
             train(resume_training=args.resume)
         elif args.mode == 'test':

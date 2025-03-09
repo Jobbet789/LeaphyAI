@@ -49,12 +49,12 @@ class DDPGAgent:
         self.action_size = action_size
         
         # Hyperparameters
-        self.gamma = 0.99
-        self.tau = 0.005  # For soft update of target parameters
-        self.batch_size = 32
+        self.gamma = 0.9995
+        self.tau = 0.001  # For soft update of target parameters
+        self.batch_size = 128
         
         # Replay buffer
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=1000000)
 
         # Add device detection
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,7 +67,7 @@ class DDPGAgent:
         self.target_actor = copy.deepcopy(self.actor).to(self.device)
         self.target_critic = copy.deepcopy(self.critic).to(self.device)
         
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.0001)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.001)
         
     def remember(self, state, action, reward, next_state, done):
