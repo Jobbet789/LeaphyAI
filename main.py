@@ -24,10 +24,10 @@ torch.manual_seed(RANDOM_SEED)
 
 # Training hyperparameters
 EPISODES = 1000000
-MAX_STEPS = 1000
+MAX_STEPS = 200
 SAVE_MODEL_EVERY = 1000  # Save model weights every N episodes
 PRINT_EVERY = 10  # Print stats every N episodes
-SIMULATION_SPEED = 1
+SIMULATION_SPEED = 5
 
 
 class TrainingCheckpoint:
