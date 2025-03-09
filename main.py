@@ -24,10 +24,10 @@ torch.manual_seed(RANDOM_SEED)
 
 # Training hyperparameters
 EPISODES = 1000000
-MAX_STEPS = 200
+MAX_STEPS = 1000
 SAVE_MODEL_EVERY = 1000  # Save model weights every N episodes
 PRINT_EVERY = 10  # Print stats every N episodes
-SIMULATION_SPEED = 5
+SIMULATION_SPEED = 1
 
 
 class TrainingCheckpoint:
@@ -141,19 +141,6 @@ class TrainingCheckpoint:
         
         return os.path.join(self.checkpoint_dir, checkpoint_files[latest_idx])
 
-def normalize_state(state, width=800, height=600):
-    """Normalize the state values to range [-1, 1]"""
-    # Robot x, y and ball positions
-    normalized = []
-    
-    for i in range(0, len(state), 2):
-        # X position - normalize to [-1, 1]
-        normalized.append(state[i] / (width/2) - 1)
-        # Y position - normalize to [-1, 1]
-        normalized.append(state[i+1] / (height/2) - 1)
-    
-    return normalized
-
 def train(resume_training=False):
     # Initialize the checkpointing system
     checkpoint_handler = TrainingCheckpoint()
@@ -171,7 +158,7 @@ def train(resume_training=False):
     
     # Initialize training variables
     episode_start = 1
-    noise_scale = max(0.1, 1.0 - episode_start / 5000)
+    noise_scale = max(0.01, 0.5 - (0.4 * episode_start / 2000))
     all_rewards = []
     moving_avg_rewards = deque(maxlen=100)
     best_reward = float('-inf')
@@ -196,35 +183,34 @@ def train(resume_training=False):
             # Reset the environment
             game.reset_simulation()
             state = game.get_state()
-            normalized_state = normalize_state(state)
             
             # Decaying noise for exploration (continue from the current noise_scale)
             if episode > episode_start:
-                noise_scale = max(0.1, 1.0 - episode / 5000)
+                noise_scale = max(0.01, 0.5 - (0.4 * episode / 2000))
             
             episode_reward = 0
             done = False
             step = 0
             
             start_time = time.time()
+
             
             # Episode loop
             while not done and step < MAX_STEPS:
                 # Select an action
-                action = agent.act(normalized_state, noise_scale)
+                action = agent.act(state, noise_scale)
                 
                 # Take action in the environment
                 next_state, reward, done = game.action(action[0], action[1])
-                normalized_next_state = normalize_state(next_state)
                 
                 # Store experience in replay memory
-                agent.remember(normalized_state, action, reward, normalized_next_state, done)
+                agent.remember(state, action, reward, next_state, done)
                 
                 # Learn from experiences
                 agent.replay()
                 
                 # Update current state and total reward
-                normalized_state = normalized_next_state
+                state = next_state
                 episode_reward += reward
                 step += 1
             
@@ -299,7 +285,6 @@ def test(model_path='best_actor.pth', episodes=10):
     for episode in range(1, episodes + 1):
         game.reset_simulation()
         state = game.get_state()
-        normalized_state = normalize_state(state)
         
         episode_reward = 0
         done = False
@@ -307,14 +292,13 @@ def test(model_path='best_actor.pth', episodes=10):
         
         while not done and step < MAX_STEPS * SIMULATION_SPEED:
             # Get action without exploration noise
-            action = agent.act(normalized_state, noise_scale=0.0)
+            action = agent.act(state, noise_scale=0.0)
             
             # Take action
             next_state, reward, done = game.action(action[0], action[1])
-            normalized_next_state = normalize_state(next_state)
             
             # Update state and reward
-            normalized_state = normalized_next_state
+            state = next_state
             episode_reward += reward
             step += 1
             
@@ -334,14 +318,63 @@ def test(model_path='best_actor.pth', episodes=10):
     
     pygame.quit()
 
+def play(episodes=10):
+    """Play the game manually for reward function testing"""
+    # Initialize the game in rendered mode
+    game = Game(rendered=True)
+    
+    print("Manual play mode for reward function testing")
+    print("Controls: W,A,S,D to move | R to reset")
+    
+    for episode in range(1, episodes + 1):
+        game.reset_simulation()
+        
+        episode_reward = 0
+        done = False
+        step = 0
+        
+        # Reset total reward for this episode
+        game.total_reward = 0
+        
+        print(f"Episode {episode}/{episodes} - Starting. Press R to reset early.")
+        
+        while not done and step < MAX_STEPS * SIMULATION_SPEED:
+            # Process events and handle keyboard input
+            game.process_events()
+            
+            # Check if the game is done after processing events
+            done = game.done
+            
+            # Draw the game state
+            game.draw()
+            
+            # Track steps
+            step += 1
+            
+            # Process any quit events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    print("Game manually closed.")
+                    return
+                # Check if reset was pressed
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                    print(f"Manual reset after {step} steps with reward: {game.total_reward:.2f}")
+                    done = True
+                    break
+        
+        print(f"Episode {episode}/{episodes} completed - Final Reward: {game.total_reward:.2f}, Steps: {step}")
+    
+    pygame.quit()
+
 if __name__ == "__main__":
     # Initialize pygame
     pygame.init()
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Train or test DDPG agent')
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test'], 
-                        help='Mode: train or test')
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'play'], 
+                        help='Mode: train, test, or play!')
     parser.add_argument('--resume', action='store_true', 
                         help='Resume training from the latest checkpoint')
     parser.add_argument('--model', type=str, default='best_actor.pth',
@@ -354,8 +387,10 @@ if __name__ == "__main__":
     try:
         if args.mode == 'train':
             train(resume_training=args.resume)
-        else:
+        elif args.mode == 'test':
             test(model_path=args.model, episodes=args.episodes)
+        elif args.mode == 'play':
+            play(episodes=args.episodes)
     except KeyboardInterrupt:
         # We just need to exit gracefully here
         print("\nExiting...")

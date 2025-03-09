@@ -211,15 +211,15 @@ class Game:
         if self.rendered:
             self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
             pygame.display.set_caption("Robot and Balls Physics Simulation")
-        # else:
-            # Create a minimal environment for headless operation
-            # pygame.display.set_mode((1, 1), pygame.NOFRAME)
         
         # Create robot away from the balls
         self.robot = Robot(WIDTH // 4, HEIGHT // 2)
         
         # Create balls in a pool-like formation in the right half of the screen
         self.balls = create_pool_formation(WIDTH * 3 // 4, HEIGHT // 2)
+        
+        # List to keep track of removed balls
+        self.removed_balls = []
         
         # List of all physics objects for collision detection
         self.all_objects = [self.robot] + self.balls
@@ -233,17 +233,8 @@ class Game:
         # Track total reward for episode
         self.total_reward = 0
         
-        # Track which balls are already in the target area
-        self.balls_in_target = [False, False, False]
-        
-        # Track how many consecutive frames all balls have been in target
-        self.all_balls_in_target_frames = 0
-        
         # Track whether the task is complete
         self.done = False
-        
-        # Track if we've already given the all-balls-in-target reward
-        self.all_balls_reward_given = False
     
     def process_events(self):
         for event in pygame.event.get():
@@ -289,26 +280,25 @@ class Game:
         # Recreate balls in formation
         self.balls = create_pool_formation(WIDTH * 3 // 4, HEIGHT // 2)
         
+        # Reset removed balls list
+        self.removed_balls = []
+        
         # Update object list
         self.all_objects = [self.robot] + self.balls
         
         # Reset tracking variables
         self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls]
         self.total_reward = 0
-        self.balls_in_target = [False, False, False]
-        self.all_balls_in_target_frames = 0
         self.done = False
-        self.all_balls_reward_given = False
-    
+
     def calculate_reward(self):
         """
         Calculate reward based on the current state.
         
         The reward function includes:
-        1. One-time reward when ALL balls enter the target area (rather than per ball)
-        2. Negative reward for balls moving away from target
-        3. Time penalty to encourage efficiency
-        4. Collision reward between robot and balls
+        1. One-time reward of 100 for each ball when it enters the target area
+        2. Reward for balls moving toward target (prev_dist - curr_dist)
+        3. Small time penalty to encourage efficiency
         
         Returns:
             float: The calculated reward
@@ -318,65 +308,52 @@ class Game:
         # Small time penalty to encourage efficiency
         reward -= 0.01
         
-        # Track current balls in target
-        current_balls_in_target = []
+        # Target center coordinates
+        target_center_x = TARGET_X + TARGET_SIZE/2
+        target_center_y = TARGET_Y + TARGET_SIZE/2
         
         # Check each ball's position relative to target
+        balls_to_remove = []
+        
         for i, ball in enumerate(self.balls):
+            # Skip balls that are already removed
+            if ball in self.removed_balls:
+                continue
+                
             # Check if ball is in target area
             in_target = ball.is_in_target_area()
-            current_balls_in_target.append(in_target)
             
-            # Distance-based reward component
-            # Calculate distance to target corner
-            target_center_x = TARGET_X + TARGET_SIZE/2
-            target_center_y = TARGET_Y + TARGET_SIZE/2
-            
-            current_dist = math.sqrt((ball.x - target_center_x)**2 + (ball.y - target_center_y)**2)
-            prev_dist = math.sqrt((self.prev_ball_positions[i][0] - target_center_x)**2 + 
-                                 (self.prev_ball_positions[i][1] - target_center_y)**2)
-            
-            # Reward for moving toward target, penalty for moving away
-            dist_diff = prev_dist - current_dist
-            reward += dist_diff * 0.01  # Scale the reward appropriately
-        
-        # Update previous positions for next calculation
-        self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls]
-        
-        # Update the tracking of balls in target (for display purposes)
-        self.balls_in_target = current_balls_in_target
-        
-        # Check if robot is close to any ball - reward for potential interaction
-        for ball in self.balls:
-            robot_ball_dist = math.sqrt((self.robot.x - ball.x)**2 + (self.robot.y - ball.y)**2)
-            # Reward for being close to balls (to encourage interaction)
-            if robot_ball_dist < self.robot.radius + ball.radius + 10:
-                reward += 0.05
-        
-        # Check if all balls are in the target area
-        if all(current_balls_in_target):
-            # Increment the counter for consecutive frames with all balls in target
-            self.all_balls_in_target_frames += 1
-            
-            # Give a big one-time reward if all balls are in target and we haven't given it yet
-            if not self.all_balls_reward_given:
-                reward += 20.0  # One-time reward for getting all balls in target
-                self.all_balls_reward_given = True
+            if in_target:
+                # Give a one-time reward for getting the ball in the target area
+                reward += 100
+                balls_to_remove.append(ball)
+            else:
+                # Distance-based reward component for balls not yet in target
+                current_dist = math.sqrt((ball.x - target_center_x)**2 + (ball.y - target_center_y)**2)
+                prev_dist = math.sqrt((self.prev_ball_positions[i][0] - target_center_x)**2 + 
+                                    (self.prev_ball_positions[i][1] - target_center_y)**2)
                 
-            # Small additional reward for keeping all balls in target
-            reward += 0.1
-        else:
-            # Reset the counter if not all balls are in target
-            self.all_balls_in_target_frames = 0
+                # Reward for moving toward target (raw distance difference)
+                reward += (prev_dist - current_dist)
+        
+        # Update previous positions for next calculation (only for balls still in play)
+        self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls if ball not in self.removed_balls]
+        
+        # Remove balls that entered the target area
+        for ball in balls_to_remove:
+            if ball in self.balls and ball not in self.removed_balls:
+                self.balls.remove(ball)
+                self.removed_balls.append(ball)
+                # Update all_objects list as well
+                if ball in self.all_objects:
+                    self.all_objects.remove(ball)
         
         return reward
     
     def check_completion(self):
-        """Check if the task is complete (all balls in target for sufficient time)"""
-        # If all balls have been in target for the required number of frames, mark as done
-        if self.all_balls_in_target_frames >= FRAMES_FOR_COMPLETION:
-            return True
-        return False
+        """Check if the task is complete (all balls in target)"""
+        # Episode is done when all balls have been removed (placed in target)
+        return len(self.balls) == len(self.removed_balls) or all(ball in self.removed_balls for ball in self.balls)
     
     def action(self, motor_left, motor_right):
         """
@@ -432,14 +409,54 @@ class Game:
         return self.get_state(), total_reward, self.done
     
     def get_state(self):
-        """Return positions of all objects"""
-        positions = []
-        # First robot position
-        positions.extend([self.robot.x, self.robot.y])
-        # Then all ball positions
-        for ball in self.balls:
-            positions.extend([ball.x, ball.y])
-        return positions
+        """
+        Return state representation:
+        - angle_to_corner (scaled to [-1, 1])
+        - angle_to_ball1, angle_to_ball2, angle_to_ball3 (scaled to [-1, 1])
+        - robot x,y position (scaled to [-1, 1])
+        - robot orientation (scaled to [-1, 1])
+        """
+        state = []
+        
+        # Target corner center coordinates
+        target_center_x = TARGET_X + TARGET_SIZE/2
+        target_center_y = TARGET_Y + TARGET_SIZE/2
+        
+        # Calculate angle to corner
+        dx_corner = target_center_x - self.robot.x
+        dy_corner = target_center_y - self.robot.y
+        angle_to_corner = math.atan2(dy_corner, dx_corner)
+        # Scale to [-1, 1]
+        angle_to_corner_scaled = angle_to_corner / math.pi
+        state.append(angle_to_corner_scaled)
+        
+        # Calculate angles to each ball
+        all_balls = self.balls + self.removed_balls  # Consider all balls, including removed ones
+        for ball in all_balls:
+            if ball in self.removed_balls:
+                # If ball is removed, use a default value to indicate it's in the target
+                state.append(0)  # Neutral angle value when ball is removed
+            else:
+                dx_ball = ball.x - self.robot.x
+                dy_ball = ball.y - self.robot.y
+                angle_to_ball = math.atan2(dy_ball, dx_ball)
+                # Scale to [-1, 1]
+                angle_to_ball_scaled = angle_to_ball / math.pi
+                state.append(angle_to_ball_scaled)
+        
+        # Add robot position scaled to [-1, 1]
+        # Scale x from [WALL_THICKNESS, WIDTH-WALL_THICKNESS] to [-1, 1]
+        x_scaled = 2 * (self.robot.x - WALL_THICKNESS) / (WIDTH - 2 * WALL_THICKNESS) - 1
+        # Scale y from [WALL_THICKNESS, HEIGHT-WALL_THICKNESS] to [-1, 1]
+        y_scaled = 2 * (self.robot.y - WALL_THICKNESS) / (HEIGHT - 2 * WALL_THICKNESS) - 1
+        state.append(x_scaled)
+        state.append(y_scaled)
+        
+        # Add robot orientation scaled to [-1, 1]
+        orientation_scaled = self.robot.rotation / math.pi
+        state.append(orientation_scaled)
+        
+        return state
     
     def draw(self):
         if not self.rendered:
@@ -477,18 +494,11 @@ class Game:
         self.screen.blit(reward_surface, (20, HEIGHT - 70))
         
         # Draw status of balls in target
-        status_text = f"Balls in target: {sum(self.balls_in_target)}/3"
+        status_text = f"Balls in target: {len(self.removed_balls)}/{len(self.balls) + len(self.removed_balls)}"
         status_surface = font.render(status_text, True, BLACK)
         self.screen.blit(status_surface, (20, HEIGHT - 100))
         
         # Draw completion status
-        if self.all_balls_in_target_frames > 0:
-            stability_text = f"Stability: {self.all_balls_in_target_frames}/{FRAMES_FOR_COMPLETION}"
-            stability_color = GREEN if self.done else BLACK
-            stability_surface = font.render(stability_text, True, stability_color)
-            self.screen.blit(stability_surface, (20, HEIGHT - 130))
-        
-        # Draw completion message
         if self.done:
             completion_text = "TASK COMPLETE!"
             completion_surface = font.render(completion_text, True, GREEN)
