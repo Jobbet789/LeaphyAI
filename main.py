@@ -50,22 +50,22 @@ class TrainingCheckpoint:
         # Save models (move to CPU before saving)
         torch.save(agent.actor.cpu().state_dict(), os.path.join(model_path, "actor.pth"))
         torch.save(agent.critic.cpu().state_dict(), os.path.join(model_path, "critic.pth"))
-        torch.save(agent.target_actor.cpu().state_dict(), os.path.join(model_path, "target_actor.pth"))
-        torch.save(agent.target_critic.cpu().state_dict(), os.path.join(model_path, "target_critic.pth"))
+        torch.save(agent.actor_target.cpu().state_dict(), os.path.join(model_path, "actor_target.pth"))
+        torch.save(agent.critic_target.cpu().state_dict(), os.path.join(model_path, "critic_target.pth"))
     
         # Make sure to move models back to GPU after saving
         agent.actor.to(agent.device)
         agent.critic.to(agent.device)
-        agent.target_actor.to(agent.device)
-        agent.target_critic.to(agent.device)
+        agent.actor_target.to(agent.device)
+        agent.critic_target.to(agent.device)
         
         # Save optimizer states
         torch.save(agent.actor_optimizer.state_dict(), os.path.join(model_path, "actor_optimizer.pth"))
         torch.save(agent.critic_optimizer.state_dict(), os.path.join(model_path, "critic_optimizer.pth"))
         
         # Save replay buffer
-        replay_buffer = list(agent.memory)
-        
+        replay_buffer = [tuple(exp) for exp in agent.memory.memory]
+
         # Save training state (excluding PyTorch models which are saved separately)
         checkpoint_data = {
             'episode': episode,
@@ -102,15 +102,17 @@ class TrainingCheckpoint:
         # Load models directly to the device
         agent.actor.load_state_dict(torch.load(os.path.join(model_path, "actor.pth"), map_location=agent.device))
         agent.critic.load_state_dict(torch.load(os.path.join(model_path, "critic.pth"), map_location=agent.device))
-        agent.target_actor.load_state_dict(torch.load(os.path.join(model_path, "target_actor.pth"), map_location=agent.device))
-        agent.target_critic.load_state_dict(torch.load(os.path.join(model_path, "target_critic.pth"), map_location=agent.device))
+        agent.actor_target.load_state_dict(torch.load(os.path.join(model_path, "actor_target.pth"), map_location=agent.device))
+        agent.critic_target.load_state_dict(torch.load(os.path.join(model_path, "critic_target.pth"), map_location=agent.device))
         
         # Restore optimizer states
         agent.actor_optimizer.load_state_dict(torch.load(os.path.join(model_path, "actor_optimizer.pth")))
         agent.critic_optimizer.load_state_dict(torch.load(os.path.join(model_path, "critic_optimizer.pth")))
         
         # Restore replay buffer
-        agent.memory = deque(checkpoint_data['replay_buffer'], maxlen=agent.memory.maxlen)
+        # Convert back to deque of Experiences
+        agent.memory.memory = deque([agent.memory.experience(*exp) for exp in checkpoint_data['replay_buffer']], maxlen=agent.buffer_size)
+
         
         # Restore random states for reproducibility
         random.setstate(checkpoint_data['random_state']['random'])
@@ -198,14 +200,15 @@ def train(resume_training=False):
             # Episode loop
             while not done and step < MAX_STEPS:
                 # Select an action
-                action = agent.act(state, noise_scale)
-                
+                # action = agent.act(state, noise_scale)
+                action = agent.act(np.array(state), noise_scale)[0]
+
                 # Take action in the environment
                 next_state, reward, done = game.action(action[0], action[1])
                 
                 # Store experience in replay memory
                 agent.remember(state, action, reward, next_state, done)
-                
+
                 # Learn from experiences
                 agent.replay()
                 
@@ -398,16 +401,13 @@ if __name__ == "__main__":
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Train or test DDPG agent')
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'play'], 
-                        help='Mode: train, test, or play!')
-    parser.add_argument('--resume', action='store_true', 
-                        help='Resume training from the latest checkpoint')
-    parser.add_argument('--model', type=str, default='best_actor.pth',
-                        help='Model path for testing')
-    parser.add_argument('--episodes', type=int, default=10,
-                        help='Number of episodes for testing')
-    parser.add_argument('--clean', action='store_true',
-                        help='Clean up the training directory')
+
+    # Make it like this: main.py train --clean or main.py resume --clean or main.py test --episodes 2
+
+    parser.add_argument('mode', type=str, choices=['train', 'test', 'play', 'resume'], help='Mode to run the agent')
+    parser.add_argument('--model', type=str, default='best_actor.pth', help='Model path for testing')
+    parser.add_argument('--episodes', type=int, default=10, help='Number of episodes for testing')
+    parser.add_argument('--clean', action='store_true', help='Clean up the training directory')
     
     args = parser.parse_args()
     
@@ -415,11 +415,15 @@ if __name__ == "__main__":
         if args.clean:
             clean()
         if args.mode == 'train':
-            train(resume_training=args.resume)
+            train(resume_training=False)
+        elif args.mode == 'resume':
+            train(resume_training=True)
         elif args.mode == 'test':
-            test(model_path=args.model, episodes=args.episodes)
+            test(args.model, args.episodes)
         elif args.mode == 'play':
-            play(episodes=args.episodes)
+            play(args.episodes)
+        
+        
     except KeyboardInterrupt:
         # We just need to exit gracefully here
         print("\nExiting...")
