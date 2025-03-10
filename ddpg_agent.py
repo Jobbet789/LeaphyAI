@@ -9,8 +9,6 @@ import torch.nn.functional as F
 import numpy as np
 from collections import deque
 
-#from visualization import NetworkVisualizer
-
 class Actor(nn.Module): # Known as DQN for the commented code
     def __init__(self, state_size, action_size):
         super().__init__()

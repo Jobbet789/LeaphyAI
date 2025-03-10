@@ -277,7 +277,7 @@ def test(model_path='best_actor.pth', episodes=10):
     agent = DDPGAgent(state_size, action_size)
     
     # Load pre-trained model
-    agent.actor.load_state_dict(torch.load(model_path))
+    agent.actor.load_state_dict(torch.load(model_path, map_location=agent.device))
     agent.actor.eval()  # Set to evaluation mode
     
     print(f"Testing model: {model_path}")
