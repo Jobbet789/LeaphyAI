@@ -378,7 +378,7 @@ class TrainingManager:
     
     def _run_play_episode(self, game, episode, total_episodes):
         """Run a single play episode"""
-        game.reset_simulation()
+        game.reset_simulation(ball_count=2)
         
         episode_reward = 0
         done = False

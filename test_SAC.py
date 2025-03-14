@@ -71,10 +71,13 @@ class TrainingManager:
 
     def _run_training_loop(self, agent, game, episode_start, all_rewards, 
                            moving_avg_rewards):
+        ball_count = 1
+        print(f"Starting with {ball_count} balls")
+
         # Run the training loop
         for episode in range(episode_start, EPISODES + 1):
             # Reset the env
-            game.reset_simulation()
+            game.reset_simulation(ball_count=ball_count)
             state = game.get_state()
 
             episode_reward = 0
@@ -98,13 +101,16 @@ class TrainingManager:
                 episode_reward += reward
                 step += 1
 
-            self._process_episode(
+            if self._process_episode(
                     episode, episode_reward, step, start_time,
-                    all_rewards, moving_avg_rewards, agent
-            )
+                    all_rewards, moving_avg_rewards, agent, ball_count):
+                if ball_count <= 3:
+                    ball_count += 1
+                    print(f"Adding a ball. Total balls: {ball_count}")
+
 
     def _process_episode(self, episode, episode_reward, step, start_time,
-                         all_rewards, moving_avg_rewards, agent):
+                         all_rewards, moving_avg_rewards, agent, ball_count):
         episode_duration = time.time() - start_time
 
         all_rewards.append(episode_reward)
@@ -125,6 +131,8 @@ class TrainingManager:
             self.best_reward = avg_reward
             agent.save("best_model")
             print(f"New best model saved with avg reward: {self.best_reward:.2f}")
+
+            return avg_reward >= (ball_count * 200 + 300) * 0.81
 
 
 class TestingManager:
@@ -157,7 +165,6 @@ class TestingManager:
             done = False
             step = 0 
             episode_reward = 0
-
 
             while not done and step < MAX_STEPS:
                 action = agent.act(np.array(state), evaluate=True)

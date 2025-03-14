@@ -157,17 +157,21 @@ class Ball(PhysicsObject):
 
 class BallFactory:
     @staticmethod
-    def create_pool_formation(center_x, center_y, radius=15):
+    def create_pool_formation(center_x, center_y, radius=15, ball_count=3):
         """Create 3 balls in a triangular pool-like formation"""
         # Define the distance between ball centers
         spacing = radius * 2.2  # Slightly more than 2 radii for a small gap
+
+        balls = [Ball(center_x, center_y - spacing/2, (255, 0, 0)),
+                Ball(center_x - spacing/2, center_y + spacing/2, (0, 255, 0)),
+                Ball(center_x + spacing/2, center_y + spacing/2, (0, 0, 255))]
         
-        # Create ball positions
-        return [
-            Ball(center_x, center_y - spacing/2, (255, 0, 0)),
-            Ball(center_x - spacing/2, center_y + spacing/2, (0, 255, 0)),
-            Ball(center_x + spacing/2, center_y + spacing/2, (0, 0, 255))
-        ]
+        random.shuffle(balls) 
+
+        # Keep ball_count balls
+        balls = balls[:ball_count]
+
+        return balls
 
 
 class Walls:
@@ -281,12 +285,16 @@ class RewardSystem:
                 self.removed_balls.append(ball)
                 if ball in all_objects:
                     all_objects.remove(ball)
+
+        if self.check_completion(balls):
+            reward += 300
         
         return reward
     
     def check_completion(self, balls):
         """Check if the task is complete (all balls in target)"""
         return len(balls) == len(self.removed_balls) or all(ball in self.removed_balls for ball in balls)
+
     
     def get_removed_balls_count(self):
         return len(self.removed_balls)
@@ -319,6 +327,12 @@ class StateGenerator:
         # Scale to [-1, 1]
         angle_to_corner_scaled = angle_to_corner / math.pi
         state.append(angle_to_corner_scaled)
+            
+            
+        colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+
+        # sort balls by color
+        balls = sorted(balls, key=lambda x: colors.index(x.color)) 
         
         # Calculate angles to each ball
         for ball in balls:
@@ -334,19 +348,43 @@ class StateGenerator:
                 state.append(angle_to_ball_scaled)
         
         """
-        # TEMP ##
-        if balls[0].color == (255, 0, 0):
-            state.append(0)
-            state.append(0)
-        elif balls[0].color == (0, 255, 0):
-            # put a 0 before the last element
-            state.insert(-1, 0)
-            state.append(0)
-        else:
-            # put 0 before the last element two time
-            state.insert(-1, 0)
-            state.insert(-1, 0)
+        Order of colors of balls is (255, 0 , 0), (0, 255, 0), (0, 0, 255)
+        If the length of balls is 1, add 0, 0 for the other balls in the correct order
+            If ball.color == (255, 0, 0), add 0, 0
+            If ball.color == (0, 255, 0), add 0 before the last item in the list, add 0 after
+            If ball.color == (0, 0, 255), add 0, 0 before the last item in the list
+
+        If the length of balls is 2, add 0 for the other ball in the correct order
         """
+
+        if len(balls) == 1:
+            if balls[0].color == (255, 0, 0):
+                state.append(0)
+                state.append(0)
+            elif balls[0].color == (0, 255, 0):
+                state.insert(-1, 0)
+                state.append(0)
+            elif balls[0].color == (0, 0, 255):
+                state.insert(-1, 0)
+                state.insert(-1, 0)
+        
+        if len(balls) == 2:
+            # Determine which color is missing in balls
+            missing_color = None
+            for color in colors:
+                if color not in [ball.color for ball in balls]:
+                    missing_color = color
+                    break
+            
+            if missing_color == (255, 0, 0):
+                state.insert(-2, 0)
+            elif missing_color == (0, 255, 0):
+                state.insert(-1, 0)
+            elif missing_color == (0, 0, 255):
+                state.append(0)
+        
+
+        
 
         # Add robot position scaled to [-1, 1]
         # Scale x from [WALL_THICKNESS, WIDTH-WALL_THICKNESS] to [-1, 1]
@@ -440,7 +478,7 @@ class Game:
         # Initialize simulation
         self.reset_simulation()
     
-    def reset_simulation(self):
+    def reset_simulation(self, ball_count=3):
         # Generate random position for robot in the left third of the screen
         robot_x = random.randint(self.WALL_THICKNESS, self.WIDTH // 3)
         robot_y = random.randint(self.WALL_THICKNESS, self.HEIGHT - self.WALL_THICKNESS)
@@ -462,7 +500,7 @@ class Game:
         self.robot.rotation = random.uniform(0, 2 * math.pi)
         
         # Create balls in formation
-        self.balls = BallFactory.create_pool_formation(self.WIDTH * 3 // 4, self.HEIGHT // 2)
+        self.balls = BallFactory.create_pool_formation(self.WIDTH * 3 // 4, self.HEIGHT // 2, ball_count=ball_count)
 
         # Keep a random 1 ball from self.balls, overrite self.balls
         # ball = random.choice(self.balls)
