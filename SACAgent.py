@@ -257,7 +257,7 @@ class SACAgent:
                 pickle.dump(self.memory)
         
     def load(self, filepath, with_buffer=False):
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, map_location=device)
         
         self.actor.load_state_dict(checkpoint['actor'])
         self.critic.load_state_dict(checkpoint['critic'])
