@@ -1,35 +1,11 @@
 import pygame
 import sys
 import math
-
-# Initialize pygame
-pygame.init()
-
-# Constants
-WIDTH, HEIGHT = 800, 600
-FPS = 60
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
-ROBOT_COLOR = (100, 100, 100)
-WALL_THICKNESS = 20
-TARGET_COLOR = (255, 240, 200)  # Light yellow/gold for target area
-
-# Define target area (bottom right corner)
-TARGET_SIZE = 150
-TARGET_X = WIDTH - WALL_THICKNESS - TARGET_SIZE
-TARGET_Y = HEIGHT - WALL_THICKNESS - TARGET_SIZE
-
-MAX_DISTANCE = math.sqrt(WIDTH**2 + HEIGHT**2)  # Maximum distance in the environment
-
-# Define constants for completion detection
-FRAMES_FOR_COMPLETION = 60  # Number of frames all balls must remain in target to be "done"
+import random
 
 class PhysicsObject:
     """Base class for objects with physics"""
-    def __init__(self, x, y, radius, color):
+    def __init__(self, x, y, radius, color, friction=0.01):
         self.x = x
         self.y = y
         self.radius = radius
@@ -37,9 +13,9 @@ class PhysicsObject:
         self.vel_x = 0
         self.vel_y = 0
         self.mass = radius * radius  # Mass proportional to size
-        self.friction = 0.01  # Base friction value
+        self.friction = friction
 
-    def update(self, dt):
+    def update(self, dt, walls):
         # Apply friction
         self.vel_x *= (1 - self.friction)
         self.vel_y *= (1 - self.friction)
@@ -47,22 +23,23 @@ class PhysicsObject:
         # Basic physics update
         self.x += self.vel_x * dt
         self.y += self.vel_y * dt
-        self._handle_wall_collision()
+        self._handle_wall_collision(walls)
 
-    def _handle_wall_collision(self):
+    def _handle_wall_collision(self, walls):
+        """Handle collision with walls"""
         # Bounce off walls
-        if self.x - self.radius < WALL_THICKNESS:
-            self.x = WALL_THICKNESS + self.radius
+        if self.x - self.radius < walls.thickness:
+            self.x = walls.thickness + self.radius
             self.vel_x = -self.vel_x * 0.8  # Damping factor
-        elif self.x + self.radius > WIDTH - WALL_THICKNESS:
-            self.x = WIDTH - WALL_THICKNESS - self.radius
+        elif self.x + self.radius > walls.width - walls.thickness:
+            self.x = walls.width - walls.thickness - self.radius
             self.vel_x = -self.vel_x * 0.8
             
-        if self.y - self.radius < WALL_THICKNESS:
-            self.y = WALL_THICKNESS + self.radius
+        if self.y - self.radius < walls.thickness:
+            self.y = walls.thickness + self.radius
             self.vel_y = -self.vel_y * 0.8
-        elif self.y + self.radius > HEIGHT - WALL_THICKNESS:
-            self.y = HEIGHT - WALL_THICKNESS - self.radius
+        elif self.y + self.radius > walls.height - walls.thickness:
+            self.y = walls.height - walls.thickness - self.radius
             self.vel_y = -self.vel_y * 0.8
 
     def draw(self, screen):
@@ -75,9 +52,7 @@ class PhysicsObject:
         distance = math.sqrt(dx * dx + dy * dy)
         
         # Check if colliding
-        if distance < self.radius + other.radius:
-            return True
-        return False
+        return distance < self.radius + other.radius
 
     def resolve_collision(self, other):
         # Calculate collision normal
@@ -118,18 +93,18 @@ class PhysicsObject:
         other.x += overlap * nx
         other.y += overlap * ny
 
-    def is_in_target_area(self):
-        """Check if object is in the target area (bottom right corner)"""
-        return (self.x > TARGET_X and self.y > TARGET_Y)
+    def is_in_target_area(self, target):
+        """Check if object is in the target area"""
+        return (self.x > target.x and self.y > target.y)
+
 
 class Robot(PhysicsObject):
     def __init__(self, x, y):
-        super().__init__(x, y, 25, ROBOT_COLOR)
+        super().__init__(x, y, 25, (100, 100, 100), friction=0.05)
         self.rotation = 0  # In radians
         self.motor_speeds = [0, 0]  # Left and right motor speeds
         self.angular_velocity = 0
-        self.speed_multiplier = 0.5  # Reduce speed (was 1.0 implicitly before)
-        self.friction = 0.05  # Robot has more friction than balls
+        self.speed_multiplier = 0.5  # Reduce speed
 
     def set_action(self, action):
         # Update motor speeds based on action
@@ -139,15 +114,13 @@ class Robot(PhysicsObject):
     
     def calculate_speed(self):
         # Average of the two motor speeds determines forward speed
-        # Apply speed multiplier to make robot slower
         return (self.motor_speeds[0] + self.motor_speeds[1]) * self.speed_multiplier
     
     def calculate_angular_speed(self):
         # Difference between motor speeds determines rotation
-        # Also scale down for smoother control
         return (self.motor_speeds[1] - self.motor_speeds[0]) * 0.08
     
-    def update(self, dt):
+    def update(self, dt, walls):
         # Calculate speeds
         speed = self.calculate_speed()
         self.angular_velocity = self.calculate_angular_speed()
@@ -164,7 +137,7 @@ class Robot(PhysicsObject):
         self.vel_y = direction_y * speed
         
         # Update position using parent method (which includes friction)
-        super().update(dt)
+        super().update(dt, walls)
     
     def draw(self, screen):
         # Draw the robot body
@@ -173,69 +146,337 @@ class Robot(PhysicsObject):
         # Draw a line to show the orientation
         line_end_x = self.x + math.cos(self.rotation) * self.radius
         line_end_y = self.y + math.sin(self.rotation) * self.radius
-        pygame.draw.line(screen, BLACK, (int(self.x), int(self.y)), 
+        pygame.draw.line(screen, (0, 0, 0), (int(self.x), int(self.y)), 
                          (int(line_end_x), int(line_end_y)), 3)
+
 
 class Ball(PhysicsObject):
     def __init__(self, x, y, color, radius=15):
-        super().__init__(x, y, radius, color)
-        self.friction = 0.03  # Increased friction for balls
-        
-        # Balls don't start with random velocity now - they'll be arranged in a pool formation
+        super().__init__(x, y, radius, color, friction=0.03)
 
-def create_pool_formation(center_x, center_y, ball_radius=15):
-    """Create 3 balls in a triangular pool-like formation"""
-    # Define the distance between ball centers
-    spacing = ball_radius * 2.2  # Slightly more than 2 radii for a small gap
+
+class BallFactory:
+    @staticmethod
+    def create_pool_formation(center_x, center_y, radius=15):
+        """Create 3 balls in a triangular pool-like formation"""
+        # Define the distance between ball centers
+        spacing = radius * 2.2  # Slightly more than 2 radii for a small gap
+        
+        # Create ball positions
+        return [
+            Ball(center_x, center_y - spacing/2, (255, 0, 0)),
+            Ball(center_x - spacing/2, center_y + spacing/2, (0, 255, 0)),
+            Ball(center_x + spacing/2, center_y + spacing/2, (0, 0, 255))
+        ]
+
+
+class Walls:
+    def __init__(self, width, height, thickness):
+        self.width = width
+        self.height = height
+        self.thickness = thickness
+        self.color = (0, 0, 0)
     
-    # Create ball positions
-    # First ball at the top of the triangle
-    ball1_pos = (center_x, center_y - spacing/2)
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, (0, 0, self.width, self.thickness))
+        pygame.draw.rect(screen, self.color, (0, 0, self.thickness, self.height))
+        pygame.draw.rect(screen, self.color, (0, self.height - self.thickness, self.width, self.thickness))
+        pygame.draw.rect(screen, self.color, (self.width - self.thickness, 0, self.thickness, self.height))
+
+
+class Target:
+    def __init__(self, width, height, thickness, size):
+        self.size = size
+        self.x = width - thickness - size
+        self.y = height - thickness - size
+        self.color = (255, 240, 200)
+        self.center_x = self.x + size/2
+        self.center_y = self.y + size/2
     
-    # Second and third balls form the base of the triangle
-    ball2_pos = (center_x - spacing/2, center_y + spacing/2)
-    ball3_pos = (center_x + spacing/2, center_y + spacing/2)
+    def draw(self, screen):
+        # Draw target area
+        pygame.draw.rect(screen, self.color, (self.x, self.y, self.size, self.size))
+        
+        # Draw a border for the target area
+        pygame.draw.rect(screen, (0, 0, 0), (self.x, self.y, self.size, self.size), 2)
+
+
+class RewardSystem:
+    def __init__(self, target, max_distance):
+        self.target = target
+        self.max_distance = max_distance
+        self.prev_ball_positions = []
+        self.prev_robot_position = None
+        self.removed_balls = [] # Add 0, 0 when doing one ball1
     
-    return [
-        Ball(ball1_pos[0], ball1_pos[1], RED),
-        Ball(ball2_pos[0], ball2_pos[1], GREEN),
-        Ball(ball3_pos[0], ball3_pos[1], BLUE)
-    ]
+    def initialize(self, balls, robot):
+        self.prev_ball_positions = [(ball.x, ball.y) for ball in balls]
+        self.prev_robot_position = (robot.x, robot.y)
+        self.removed_balls = []
+    
+    def calculate(self, balls, robot, all_objects):
+        """Calculate reward based on the current state"""
+        reward = 0
+    
+        # Small time penalty to encourage efficiency
+        reward -= 0.01
+        
+        # Target center coordinates
+        target_center_x = self.target.center_x
+        target_center_y = self.target.center_y
+
+        # Current robot center coordinates
+        robot_center_x = robot.x + robot.radius
+        robot_center_y = robot.y + robot.radius
+
+        # Ball rewards calculation
+        balls_to_remove = []
+
+        moving_towards_any_ball = False
+        
+        for i, ball in enumerate(balls):
+            # Skip balls that are already removed
+            if ball in self.removed_balls:
+                continue
+                
+            # Check if ball is in target area
+            in_target = ball.is_in_target_area(self.target)
+            
+            if in_target:
+                # Give a one-time reward for getting the ball in the target area
+                reward += 200
+                balls_to_remove.append(ball)
+            else:
+                # Distance-based reward component for balls not yet in target
+                current_dist = math.sqrt((ball.x - target_center_x)**2 + (ball.y - target_center_y)**2)
+                prev_dist = math.sqrt((self.prev_ball_positions[i][0] - target_center_x)**2 + 
+                                    (self.prev_ball_positions[i][1] - target_center_y)**2)
+                
+                # Reward for moving toward target
+                if prev_dist - current_dist > 0:  # If the ball is moving towards the target
+        # Keep only i-th ball
+                    reward += 0.03
+
+                current_dist_robot = math.sqrt((ball.x - (robot.x + robot.radius))**2 + (ball.y - (robot.y + robot.radius))**2)
+                prev_dist_robot = math.sqrt((self.prev_ball_positions[i][0] - (self.prev_robot_position[0] + robot.radius))**2 + 
+                                    (self.prev_ball_positions[i][1] - (self.prev_robot_position[1] + robot.radius))**2)
+
+                # Reward for moving towards any ball
+                if prev_dist_robot - current_dist_robot > 0:
+                    moving_towards_any_ball = True
+
+        if moving_towards_any_ball:
+            reward += 0.02
+
+        # Store current robot position for next calculation
+        self.prev_robot_position = (robot.x, robot.y)
+        
+        # Update previous positions for next calculation
+        self.prev_ball_positions = [(ball.x, ball.y) for ball in balls]
+
+        
+        # Remove balls that entered the target area
+        for ball in balls_to_remove:
+            if ball in balls and ball not in self.removed_balls:
+                self.removed_balls.append(ball)
+                if ball in all_objects:
+                    all_objects.remove(ball)
+        
+        return reward
+    
+    def check_completion(self, balls):
+        """Check if the task is complete (all balls in target)"""
+        return len(balls) == len(self.removed_balls) or all(ball in self.removed_balls for ball in balls)
+    
+    def get_removed_balls_count(self):
+        return len(self.removed_balls)
+
+
+class PhysicsEngine:
+    @staticmethod
+    def update_objects(objects, dt, walls):
+        # Update all objects
+        for obj in objects:
+            obj.update(dt, walls)
+        
+        # Check for collisions between all objects
+        for i in range(len(objects)):
+            for j in range(i + 1, len(objects)):
+                if objects[i].check_collision(objects[j]):
+                    objects[i].resolve_collision(objects[j])
+
+
+class StateGenerator:
+    @staticmethod
+    def get_state(robot, balls, target, walls, removed_balls):
+        """Return state representation for agent"""
+        state = []
+        
+        # Calculate angle to corner
+        dx_corner = target.center_x - robot.x
+        dy_corner = target.center_y - robot.y
+        angle_to_corner = math.atan2(dy_corner, dx_corner)
+        # Scale to [-1, 1]
+        angle_to_corner_scaled = angle_to_corner / math.pi
+        state.append(angle_to_corner_scaled)
+        
+        # Calculate angles to each ball
+        for ball in balls:
+            if ball in removed_balls:
+                # If ball is removed, use a default value to indicate it's in the target
+                state.append(0)  # Neutral angle value when ball is removed
+            else:
+                dx_ball = ball.x - robot.x
+                dy_ball = ball.y - robot.y
+                angle_to_ball = math.atan2(dy_ball, dx_ball)
+                # Scale to [-1, 1]
+                angle_to_ball_scaled = angle_to_ball / math.pi
+                state.append(angle_to_ball_scaled)
+        
+        """
+        # TEMP ##
+        if balls[0].color == (255, 0, 0):
+            state.append(0)
+            state.append(0)
+        elif balls[0].color == (0, 255, 0):
+            # put a 0 before the last element
+            state.insert(-1, 0)
+            state.append(0)
+        else:
+            # put 0 before the last element two time
+            state.insert(-1, 0)
+            state.insert(-1, 0)
+        """
+
+        # Add robot position scaled to [-1, 1]
+        # Scale x from [WALL_THICKNESS, WIDTH-WALL_THICKNESS] to [-1, 1]
+        x_scaled = 2 * (robot.x - walls.thickness) / (walls.width - 2 * walls.thickness) - 1
+        # Scale y from [WALL_THICKNESS, HEIGHT-WALL_THICKNESS] to [-1, 1]
+        y_scaled = 2 * (robot.y - walls.thickness) / (walls.height - 2 * walls.thickness) - 1
+        state.append(x_scaled)
+        state.append(y_scaled)
+        
+        # Add robot orientation scaled to [-1, 1]
+        orientation_scaled = robot.rotation / math.pi
+        state.append(orientation_scaled)
+        
+        return state
+
+
+class UI:
+    def __init__(self, screen, width, height):
+        self.screen = screen
+        self.width = width
+        self.height = height
+        self.font = pygame.font.SysFont(None, 24)
+    
+    def draw(self, target, walls, all_objects, total_reward, balls, reward_system, done):
+        self.screen.fill((255, 255, 255))
+        
+        # Draw target and walls
+        target.draw(self.screen)
+        walls.draw(self.screen)
+        
+        # Draw all objects
+        for obj in all_objects:
+            obj.draw(self.screen)
+        
+        # Draw instructions
+        controls_text = "Controls: W,A,S,D to move | R to reset"
+        text_surface = self.font.render(controls_text, True, (0, 0, 0))
+        self.screen.blit(text_surface, (20, self.height - 40))
+        
+        # Draw current reward
+        reward_text = f"Total Reward: {total_reward:.2f}"
+        reward_surface = self.font.render(reward_text, True, (0, 0, 0))
+        self.screen.blit(reward_surface, (20, self.height - 70))
+        
+        # Draw status of balls in target
+        status_text = f"Balls in target: {reward_system.get_removed_balls_count()}/{len(balls)}"
+        status_surface = self.font.render(status_text, True, (0, 0, 0))
+        self.screen.blit(status_surface, (20, self.height - 100))
+        
+        # Draw completion status
+        if done:
+            completion_text = "TASK COMPLETE!"
+            completion_surface = self.font.render(completion_text, True, (0, 255, 0))
+            text_rect = completion_surface.get_rect(center=(self.width//2, 50))
+            self.screen.blit(completion_surface, text_rect)
+        
+        pygame.display.flip()
+
 
 class Game:
     def __init__(self, rendered=True, physics_steps=1):
+        # Constants
+        self.WIDTH, self.HEIGHT = 800, 600
+        self.FPS = 60
+        self.WALL_THICKNESS = 20
+        self.TARGET_SIZE = 150
+        self.MAX_DISTANCE = math.sqrt(self.WIDTH**2 + self.HEIGHT**2)
+        
+        # Game state
         self.rendered = rendered
         self.physics_steps = physics_steps
-        self.clock = pygame.time.Clock()
         self.running = True
+        self.clock = pygame.time.Clock()
+        self.dt = 1.0 / self.FPS
+        self.total_reward = 0
+        self.done = False
+        
+        # Initialize pygame
+        pygame.init()
+        
+        # Initialize components
+        self.walls = Walls(self.WIDTH, self.HEIGHT, self.WALL_THICKNESS)
+        self.target = Target(self.WIDTH, self.HEIGHT, self.WALL_THICKNESS, self.TARGET_SIZE)
         
         # Initialize pygame window only if in rendered mode
         if self.rendered:
-            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
             pygame.display.set_caption("Robot and Balls Physics Simulation")
+            self.ui = UI(self.screen, self.WIDTH, self.HEIGHT)
         
-        # Create robot away from the balls
-        self.robot = Robot(WIDTH // 4, HEIGHT // 2)
+        # Initialize simulation
+        self.reset_simulation()
+    
+    def reset_simulation(self):
+        # Generate random position for robot in the left third of the screen
+        robot_x = random.randint(self.WALL_THICKNESS, self.WIDTH // 3)
+        robot_y = random.randint(self.WALL_THICKNESS, self.HEIGHT - self.WALL_THICKNESS)
+        """
+        # TEMP ##
+        if random.random() < 0.5:
+            robot_x = random.randint(self.WALL_THICKNESS, self.WIDTH // 4)
+        else:
+            robot_x = random.randint(self.WIDTH // 4 * 3, self.WIDTH - self.WALL_THICKNESS)
+
+        if random.random() < 0.5:
+            robot_y = random.randint(self.WALL_THICKNESS, self.HEIGHT // 4)
+        else:
+            robot_y = random.randint(self.HEIGHT // 4 * 3, self.HEIGHT - self.WALL_THICKNESS)
+        """
+
+        # Reset robot
+        self.robot = Robot(robot_x, robot_y)
+        self.robot.rotation = random.uniform(0, 2 * math.pi)
         
-        # Create balls in a pool-like formation in the right half of the screen
-        self.balls = create_pool_formation(WIDTH * 3 // 4, HEIGHT // 2)
+        # Create balls in formation
+        self.balls = BallFactory.create_pool_formation(self.WIDTH * 3 // 4, self.HEIGHT // 2)
+
+        # Keep a random 1 ball from self.balls, overrite self.balls
+        # ball = random.choice(self.balls)
+        #self.balls = [ball]
         
-        # List to keep track of removed balls
-        self.removed_balls = []
-        
-        # List of all physics objects for collision detection
+        # Update object list
         self.all_objects = [self.robot] + self.balls
         
-        # Track the frame time for consistent physics in both modes
-        self.dt = 1.0 / FPS
+        # Initialize reward system
+        self.reward_system = RewardSystem(self.target, self.MAX_DISTANCE)
+        self.reward_system.initialize(self.balls, self.robot)
         
-        # Track the previous positions for distance-based reward
-        self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls]
-        
-        # Track total reward for episode
+        # Reset tracking variables
         self.total_reward = 0
-        
-        # Track whether the task is complete
         self.done = False
     
     def process_events(self):
@@ -267,285 +508,68 @@ class Game:
         # Apply the action directly
         _, reward, done = self.action(left_motor, right_motor)
         
-        # Display the reward if in rendered mode
+        # Update total reward
         if self.rendered:
             self.total_reward += reward
     
-    def reset_simulation(self):
-        # Reset robot position
-        self.robot.x = WIDTH // 4
-        self.robot.y = HEIGHT // 2
-        self.robot.vel_x = 0
-        self.robot.vel_y = 0
-        self.robot.rotation = 0
-        
-        # Recreate balls in formation
-        self.balls = create_pool_formation(WIDTH * 3 // 4, HEIGHT // 2)
-        
-        # Reset removed balls list
-        self.removed_balls = []
-        
-        # Update object list
-        self.all_objects = [self.robot] + self.balls
-        
-        # Reset tracking variables
-        self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls]
-        self.total_reward = 0
-        self.done = False
-
-    def calculate_reward(self):
-        """
-        Calculate reward based on the current state.
-        
-        The reward function includes:
-        1. One-time reward of 100 for each ball when it enters the target area
-        2. Reward for balls moving toward target (prev_dist - curr_dist)
-        3. Small time penalty to encourage efficiency
-        
-        Returns:
-            float: The calculated reward
-        """
-        reward = 0
-    
-        # Small time penalty to encourage efficiency
-        reward -= 0.01
-        
-        # Target center coordinates
-        target_center_x = TARGET_X + TARGET_SIZE/2
-        target_center_y = TARGET_Y + TARGET_SIZE/2
-
-        # Current robot center coordinates
-        robot_center_x = self.robot.x + self.robot.radius
-        robot_center_y = self.robot.y + self.robot.radius
-
-        closest_ball_dist = math.inf
-        closest_ball_prev_dist = math.inf
-        closest_ball_idx = -1
-        
-        # Ball rewards calculation
-        balls_to_remove = []
-        
-        for i, ball in enumerate(self.balls):
-            # Skip balls that are already removed
-            if ball in self.removed_balls:
-                continue
-                
-            # Check if ball is in target area
-            in_target = ball.is_in_target_area()
-            
-            if in_target:
-                # Give a one-time reward for getting the ball in the target area
-                reward += 100
-                balls_to_remove.append(ball)
-            else:
-                # Distance-based reward component for balls not yet in target
-                current_dist = math.sqrt((ball.x - target_center_x)**2 + (ball.y - target_center_y)**2)
-                prev_dist = math.sqrt((self.prev_ball_positions[i][0] - target_center_x)**2 + 
-                                    (self.prev_ball_positions[i][1] - target_center_y)**2)
-                
-                # Reward for moving toward target (raw distance difference)
-                reward += 100 * ((prev_dist - current_dist)/MAX_DISTANCE)
-
-                # Find the closest ball to the robot
-                current_dist_robot = math.sqrt((ball.x - robot_center_x)**2 + (ball.y - robot_center_y)**2)
-                
-                if current_dist_robot < closest_ball_dist:
-                    closest_ball_dist = current_dist_robot
-                    closest_ball_idx = i
-        
-        # Calculate the robot-to-closest-ball reward using previous robot position
-        if closest_ball_idx >= 0 and hasattr(self, 'prev_robot_position'):
-            prev_robot_center_x = self.prev_robot_position[0] + self.robot.radius
-            prev_robot_center_y = self.prev_robot_position[1] + self.robot.radius
-            
-            closest_ball_prev_dist = math.sqrt(
-                (self.prev_ball_positions[closest_ball_idx][0] - prev_robot_center_x)**2 +
-                (self.prev_ball_positions[closest_ball_idx][1] - prev_robot_center_y)**2
-            )
-            
-            # Now calculate the reward for getting closer to the closest ball
-            reward += 5 * ((closest_ball_prev_dist - closest_ball_dist)/MAX_DISTANCE)
-        
-        # Store current robot position for next calculation
-        self.prev_robot_position = (self.robot.x, self.robot.y)
-        
-        # Update previous positions for next calculation (only for balls still in play)
-        self.prev_ball_positions = [(ball.x, ball.y) for ball in self.balls if ball not in self.removed_balls]
-        
-        # Remove balls that entered the target area
-        for ball in balls_to_remove:
-            if ball in self.balls and ball not in self.removed_balls:
-                self.balls.remove(ball)
-                self.removed_balls.append(ball)
-                # Update all_objects list as well
-                if ball in self.all_objects:
-                    self.all_objects.remove(ball)
-        
-        return reward
-    
-    def check_completion(self):
-        """Check if the task is complete (all balls in target)"""
-        # Episode is done when all balls have been removed (placed in target)
-        return len(self.balls) == len(self.removed_balls) or all(ball in self.removed_balls for ball in self.balls)
-    
     def action(self, motor_left, motor_right):
-        """
-        Apply motor commands and step the simulation.
-        
-        Args:
-            motor_left (float): Left motor speed in range [-1, 1]
-            motor_right (float): Right motor speed in range [-1, 1]
-            
-        Returns:
-            tuple: (positions, reward, done)
-                positions: list of coordinates [robot_x, robot_y, ball1_x, ball1_y, ...]
-                reward: float value indicating the reward for this action
-                done: boolean indicating if the episode is complete
-        """
+        """Apply motor commands and step the simulation"""
         # Set robot action
         self.robot.set_action([motor_left, motor_right])
 
         total_reward = 0
         
-        # Run multiple physcics steps per action
+        # Run multiple physics steps per action
         for _ in range(self.physics_steps):
-            # Update physics (use fixed time step for consistent physics)
+            # In rendered mode, get the actual time delta
             if self.rendered:
-                # In rendered mode, get the actual time delta
-                self.dt = self.clock.tick(FPS) / 1000.0
-            # else use the fixed dt defined in __init__
+                self.dt = self.clock.tick(self.FPS) / 1000.0
             
-            # Update all objects
-            for obj in self.all_objects:
-                obj.update(self.dt)
-            
-            # Check for collisions between all objects
-            for i in range(len(self.all_objects)):
-                for j in range(i + 1, len(self.all_objects)):
-                    if self.all_objects[i].check_collision(self.all_objects[j]):
-                        self.all_objects[i].resolve_collision(self.all_objects[j])
+            # Update physics
+            PhysicsEngine.update_objects(self.all_objects, self.dt, self.walls)
             
             # Calculate reward
-            step_reward = self.calculate_reward()
+            step_reward = self.reward_system.calculate(self.balls, self.robot, self.all_objects)
             total_reward += step_reward
             
             # Check if episode is done
-            if not self.done:  # Only check if not already done
-                self.done = self.check_completion()
-                
-                # Give a completion reward if we just finished
+            if not self.done:
+                self.done = self.reward_system.check_completion(self.balls)
                 if self.done:
-                    total_reward += 50.0  # Big reward for maintaining all balls in target
                     break
         
         # Return state, reward, and done flag
         return self.get_state(), total_reward, self.done
     
     def get_state(self):
-        """
-        Return state representation:
-        - angle_to_corner (scaled to [-1, 1])
-        - angle_to_ball1, angle_to_ball2, angle_to_ball3 (scaled to [-1, 1])
-        - robot x,y position (scaled to [-1, 1])
-        - robot orientation (scaled to [-1, 1])
-        """
-        state = []
-        
-        # Target corner center coordinates
-        target_center_x = TARGET_X + TARGET_SIZE/2
-        target_center_y = TARGET_Y + TARGET_SIZE/2
-        
-        # Calculate angle to corner
-        dx_corner = target_center_x - self.robot.x
-        dy_corner = target_center_y - self.robot.y
-        angle_to_corner = math.atan2(dy_corner, dx_corner)
-        # Scale to [-1, 1]
-        angle_to_corner_scaled = angle_to_corner / math.pi
-        state.append(angle_to_corner_scaled)
-        
-        # Calculate angles to each ball
-        all_balls = self.balls + self.removed_balls  # Consider all balls, including removed ones
-        for ball in all_balls:
-            if ball in self.removed_balls:
-                # If ball is removed, use a default value to indicate it's in the target
-                state.append(0)  # Neutral angle value when ball is removed
-            else:
-                dx_ball = ball.x - self.robot.x
-                dy_ball = ball.y - self.robot.y
-                angle_to_ball = math.atan2(dy_ball, dx_ball)
-                # Scale to [-1, 1]
-                angle_to_ball_scaled = angle_to_ball / math.pi
-                state.append(angle_to_ball_scaled)
-        
-        # Add robot position scaled to [-1, 1]
-        # Scale x from [WALL_THICKNESS, WIDTH-WALL_THICKNESS] to [-1, 1]
-        x_scaled = 2 * (self.robot.x - WALL_THICKNESS) / (WIDTH - 2 * WALL_THICKNESS) - 1
-        # Scale y from [WALL_THICKNESS, HEIGHT-WALL_THICKNESS] to [-1, 1]
-        y_scaled = 2 * (self.robot.y - WALL_THICKNESS) / (HEIGHT - 2 * WALL_THICKNESS) - 1
-        state.append(x_scaled)
-        state.append(y_scaled)
-        
-        # Add robot orientation scaled to [-1, 1]
-        orientation_scaled = self.robot.rotation / math.pi
-        state.append(orientation_scaled)
-        
-        return state
-    
-    def draw(self):
-        if not self.rendered:
-            return
-            
-        self.screen.fill(WHITE)
-        
-        # Draw target area (bottom right corner)
-        pygame.draw.rect(self.screen, TARGET_COLOR, 
-                        (TARGET_X, TARGET_Y, TARGET_SIZE, TARGET_SIZE))
-        
-        # Draw a border for the target area
-        pygame.draw.rect(self.screen, BLACK, 
-                        (TARGET_X, TARGET_Y, TARGET_SIZE, TARGET_SIZE), 2)
-        
-        # Draw walls
-        pygame.draw.rect(self.screen, BLACK, (0, 0, WIDTH, WALL_THICKNESS))
-        pygame.draw.rect(self.screen, BLACK, (0, 0, WALL_THICKNESS, HEIGHT))
-        pygame.draw.rect(self.screen, BLACK, (0, HEIGHT - WALL_THICKNESS, WIDTH, WALL_THICKNESS))
-        pygame.draw.rect(self.screen, BLACK, (WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, HEIGHT))
-        
-        # Draw all objects
-        for obj in self.all_objects:
-            obj.draw(self.screen)
-        
-        # Draw instructions
-        font = pygame.font.SysFont(None, 24)
-        controls_text = "Controls: W,A,S,D to move | R to reset"
-        text_surface = font.render(controls_text, True, BLACK)
-        self.screen.blit(text_surface, (20, HEIGHT - 40))
-        
-        # Draw current reward
-        reward_text = f"Total Reward: {self.total_reward:.2f}"
-        reward_surface = font.render(reward_text, True, BLACK)
-        self.screen.blit(reward_surface, (20, HEIGHT - 70))
-        
-        # Draw status of balls in target
-        status_text = f"Balls in target: {len(self.removed_balls)}/{len(self.balls) + len(self.removed_balls)}"
-        status_surface = font.render(status_text, True, BLACK)
-        self.screen.blit(status_surface, (20, HEIGHT - 100))
-        
-        # Draw completion status
-        if self.done:
-            completion_text = "TASK COMPLETE!"
-            completion_surface = font.render(completion_text, True, GREEN)
-            text_rect = completion_surface.get_rect(center=(WIDTH//2, 50))
-            self.screen.blit(completion_surface, text_rect)
-        
-        pygame.display.flip()
+        """Return state representation for agent"""
+        return StateGenerator.get_state(
+            self.robot, 
+            self.balls, 
+            self.target, 
+            self.walls, 
+            self.reward_system.removed_balls
+        )
     
     def update(self):
-        """Wrapper for action() that uses keyboard controls"""
-        # This method is maintained for backward compatibility
-        # For rendered mode, process events and handle keyboard input
+        """Process events and handle keyboard input (for rendered mode)"""
         if self.rendered:
             self.process_events()
+    
+    def draw(self):
+        """Render the scene (for rendered mode)"""
+        if not self.rendered:
+            return
+        
+        self.ui.draw(
+            self.target, 
+            self.walls, 
+            self.all_objects, 
+            self.total_reward, 
+            self.balls, 
+            self.reward_system, 
+            self.done
+        )
     
     def run(self):
         """Run the game loop (only used in rendered mode)"""
@@ -558,3 +582,9 @@ class Game:
         
         pygame.quit()
         sys.exit()
+
+
+# Entry point
+if __name__ == "__main__":
+    game = Game(rendered=True)
+    game.run()

@@ -92,12 +92,12 @@ class ReplayBuffer:
 class DDPGAgent:
     def __init__(self, state_size, action_size, 
                  buffer_size=int(1e6), 
-                 batch_size=64, 
+                 batch_size=128, 
                  gamma=0.99, 
                  tau=1e-3, 
-                 lr_actor=1e-4, 
-                 lr_critic=1e-3,
-                 weight_decay=0):
+                 lr_actor=5e-5, 
+                 lr_critic=5e-4,
+                 weight_decay=1e-5):
         
         self.device = device 
         # Initialize parameters
@@ -179,7 +179,8 @@ class DDPGAgent:
         
         # Compute critic loss
         Q_expected = self.critic(states, actions)
-        critic_loss = F.mse_loss(Q_expected, Q_targets)
+        # critic_loss = F.mse_loss(Q_expected, Q_targets)
+        critic_loss = F.smooth_l1_loss(Q_expected, Q_targets)
         
         # Minimize the loss
         self.critic_optimizer.zero_grad()
