@@ -41,7 +41,7 @@ class ReplayBuffer:
 
 # Actor Network (Policy)
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_size_1=256, hidden_size_2=256, log_std_min=-20, log_std_max=2):
+    def __init__(self, state_dim, action_dim, hidden_size_1=512, hidden_size_2=512, hidden_size_3=512, log_std_min=-20, log_std_max=2):
         super(Actor, self).__init__()
 
         self.log_std_max = log_std_max
@@ -49,13 +49,15 @@ class Actor(nn.Module):
 
         self.fc1 = nn.Linear(state_dim, hidden_size_1)
         self.fc2 = nn.Linear(hidden_size_1, hidden_size_2)
+        self.fc3 = nn.Linear(hidden_size_2, hidden_size_3)
 
-        self.mu = nn.Linear(hidden_size_2, action_dim)
-        self.log_std = nn.Linear(hidden_size_2, action_dim)
+        self.mu = nn.Linear(hidden_size_3, action_dim)
+        self.log_std = nn.Linear(hidden_size_3, action_dim)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
 
         mu = self.mu(x)
         log_std = self.log_std(x)
@@ -85,18 +87,20 @@ class Actor(nn.Module):
 
 # Critic Network (Q-function) with two hidden layers (SAC)
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_size_1=256, hidden_size_2=256):
+    def __init__(self, state_dim, action_dim, hidden_size_1=512, hidden_size_2=512, hidden_size_3=512):
         super(Critic, self).__init__()
 
         # Q1 architecture
         self.fc1 = nn.Linear(state_dim + action_dim, hidden_size_1)
         self.fc2 = nn.Linear(hidden_size_1, hidden_size_2)
-        self.q1 = nn.Linear(hidden_size_2, 1)
+        self.fc3 = nn.Linear(hidden_size_2, hidden_size_3)
+        self.q1 = nn.Linear(hidden_size_3, 1)
 
         # Q2 architecture
-        self.fc3 = nn.Linear(state_dim + action_dim, hidden_size_1)
-        self.fc4 = nn.Linear(hidden_size_1, hidden_size_2)
-        self.q2 = nn.Linear(hidden_size_2, 1)
+        self.fc4 = nn.Linear(state_dim + action_dim, hidden_size_1)
+        self.fc5 = nn.Linear(hidden_size_1, hidden_size_2)
+        self.fc6 = nn.Linear(hidden_size_2, hidden_size_3)
+        self.q2 = nn.Linear(hidden_size_3, 1)
 
     def forward(self, state, action):
         x = torch.cat([state, action], 1)
@@ -104,11 +108,13 @@ class Critic(nn.Module):
         # Q1
         q1 = F.relu(self.fc1(x))
         q1 = F.relu(self.fc2(q1))
+        q1 = F.relu(self.fc3(q1))
         q1 = F.relu(self.q1(q1))
 
         # Q2
-        q2 = F.relu(self.fc3(x))
-        q2 = F.relu(self.fc4(q2))
+        q2 = F.relu(self.fc4(x))
+        q2 = F.relu(self.fc5(q2))
+        q2 = F.relu(self.fc6(q2))
         q2 = F.relu(self.q2(q2))
 
         return q1, q2
@@ -119,6 +125,7 @@ class Critic(nn.Module):
 
         q1 = F.relu(self.fc1(x))
         q1 = F.relu(self.fc2(q1))
+        q1 = F.relu(self.fc3(q1))
         q1 = F.relu(self.q1(q1))
 
         return q1
@@ -128,8 +135,9 @@ class SACAgent:
                 state_dim,
                 action_dim,
                 action_high,
-                hidden_size_1=256,
-                hidden_size_2=256,
+                hidden_size_1=512,
+                hidden_size_2=512,
+                hidden_size_3=512,
                 buffer_size=int(1e6),
                 batch_size=256,
                 gamma=0.99,
@@ -147,15 +155,15 @@ class SACAgent:
         self.automatic_entropy_tuning = automatic_entropy_tuning
 
         # Init actor net
-        self.actor = Actor(state_dim, action_dim, hidden_size_1, hidden_size_2).to(device)
+        self.actor = Actor(state_dim, action_dim, hidden_size_1, hidden_size_2, hidden_size_3).to(device)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr)
 
         # Init critic nets
-        self.critic = Critic(state_dim, action_dim, hidden_size_1, hidden_size_2).to(device)
+        self.critic = Critic(state_dim, action_dim, hidden_size_1, hidden_size_2, hidden_size_3).to(device)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=lr)
 
         # Init target critic nets
-        self.critic_target = Critic(state_dim, action_dim, hidden_size_1, hidden_size_2).to(device)
+        self.critic_target = Critic(state_dim, action_dim, hidden_size_1, hidden_size_2, hidden_size_3).to(device)
         # Hard copy params
         for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
             target_param.data.copy_(param.data)
@@ -273,26 +281,3 @@ class SACAgent:
         if with_buffer:
             with open(f"{filepath}_buffer.pkl", 'rb') as f:
                 self.memory = pickle.load(f)
-
-"""
-if __name__ == "__main__":
-    # Example with a continuous action space environment
-    state_dim = 17  # Example state dimension
-    action_dim = 6  # Example action dimension
-    action_high = 1.0  # Example action bounds
-    
-    # Initialize agent
-    agent = SACAgent(state_dim=state_dim, 
-                     action_dim=action_dim, 
-                     action_high=action_high,
-                     hidden_size_1=256,
-                     hidden_size_2=256,
-                     buffer_size=1000000,
-                     batch_size=256,
-                     gamma=0.99,
-                     tau=0.005,
-                     automatic_entropy_tuning=True)
-    
-    print(f"SAC Agent initialized on device: {device}")
-
-"""

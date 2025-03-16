@@ -44,9 +44,7 @@ class TrainingManager:
         # Initialize the agent
         agent = SACAgent(state_size,
                          action_size,
-                         action_high,
-                         hidden_size_1=512,
-                         hidden_size_2=512)
+                         action_high)
 
         if continue_training:
             agent.load("best_model")
@@ -72,7 +70,7 @@ class TrainingManager:
     def _run_training_loop(self, agent, game, episode_start, all_rewards, 
                            moving_avg_rewards):
         ball_count = 1
-        print(f"Starting with {ball_count} balls")
+        print(f"Starting with {ball_count} ball{'s' if ball_count > 1 else ''}...")
 
         # Run the training loop
         for episode in range(episode_start, EPISODES + 1):
@@ -106,6 +104,8 @@ class TrainingManager:
                     all_rewards, moving_avg_rewards, agent, ball_count):
                 if ball_count <= 3:
                     ball_count += 1
+                    # remove replay buffer
+                    agent.memory.buffer.clear()
                     print(f"Adding a ball. Total balls: {ball_count}")
 
 
@@ -132,7 +132,7 @@ class TrainingManager:
             agent.save("best_model")
             print(f"New best model saved with avg reward: {self.best_reward:.2f}")
 
-            return avg_reward >= (ball_count * 200 + 300) * 0.81
+            return avg_reward >= (ball_count * 200 + 300)
 
 
 class TestingManager:
@@ -159,7 +159,7 @@ class TestingManager:
     @staticmethod
     def _run_testing_loop(game, agent):
         while True:
-            game.reset_simulation()
+            game.reset_simulation(ball_count=2)
             state = game.get_state()
 
             done = False
